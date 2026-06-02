@@ -212,6 +212,40 @@ tempCodeRunnerFile.py
 # Marimo
 marimo/_static/
 marimo/_lsp/
+
+# Secrets / credentials
+.env
+.env.*
+*.key
+service-account*.json
+credentials*.json
+gcp-key*.json
+secrets/
+.keys/
+
+# Real health data - never commit
+data/
+raw/
+downloads/
+exports/
+reports/
+medical_reports/
+*.pdf
+*.csv
+*.xlsx
+*.xls
+*.zip
+
+# Local config
+.idea/
+.vscode/
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
 __marimo__/
 
 # Streamlit
