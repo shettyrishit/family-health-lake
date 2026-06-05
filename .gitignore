@@ -223,6 +223,29 @@ gcp-key*.json
 secrets/
 .keys/
 
+# Sensitive or generated project data
+data/
+raw/
+downloads/
+exports/
+reports/
+medical_reports/
+*.pdf
+*.csv
+*.xlsx
+*.xls
+*.zip
+outputs/
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+credentials*.json
+gcp-key*.json
+secrets/
+.keys/
+
 # Real health data - never commit
 data/
 raw/
