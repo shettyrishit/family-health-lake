@@ -5,6 +5,7 @@ import csv
 import json
 import re
 import unicodedata
+from io import StringIO
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -49,6 +50,8 @@ HEALTH_METRIC_FIELDS = [
     "status",
     "notes",
 ]
+
+MULTILINE_TEXT_FIELDS = {"raw_text", "surrounding_text", "notes"}
 
 VALUE_RE = re.compile(
     r"(?P<comparator><=|>=|<|>)?\s*(?P<number>\d+(?:,\d{3})*(?:\.\d+)?)"
@@ -993,10 +996,34 @@ def write_csv(
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=fieldnames,
+            quoting=csv.QUOTE_MINIMAL,
+            lineterminator="\n",
+        )
         writer.writeheader()
         for row in rows:
-            writer.writerow({field: row.get(field, "") for field in fieldnames})
+            writer.writerow(_sanitize_row_for_csv(row, fieldnames))
+
+
+def _normalize_csv_text(value: Any) -> str:
+    text = "" if value is None else str(value)
+    return " ".join(text.replace("\r", " ").replace("\n", " ").split())
+
+
+def _sanitize_row_for_csv(
+    row: Dict[str, Any],
+    fieldnames: Sequence[str],
+) -> Dict[str, Any]:
+    sanitized: Dict[str, Any] = {}
+    for field in fieldnames:
+        value = row.get(field, "")
+        if field in MULTILINE_TEXT_FIELDS:
+            sanitized[field] = _normalize_csv_text(value)
+        else:
+            sanitized[field] = "" if value is None else value
+    return sanitized
 
 
 def write_extraction_report(report: Dict[str, Any], output_path: str | Path) -> None:

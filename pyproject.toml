@@ -11,6 +11,10 @@ requires-python = ">=3.9"
 dependencies = []
 
 [project.optional-dependencies]
+bigquery = [
+    "google-cloud-bigquery>=3,<4",
+    "PyYAML>=6,<7",
+]
 pdf = [
     "PyMuPDF>=1.24,<2",
 ]

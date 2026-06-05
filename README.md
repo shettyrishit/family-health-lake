@@ -54,3 +54,38 @@ Run the fake-fixture test suite with:
 ```bash
 python3 -m pytest
 ```
+
+## Local BigQuery Load
+
+Install the optional BigQuery dependencies when you want to load extractor outputs into BigQuery:
+
+```bash
+python -m pip install -e ".[bigquery]"
+```
+
+Authenticate locally with Google Application Default Credentials before running the loader:
+
+```bash
+gcloud auth application-default login
+```
+
+The loader:
+- uses ADC through the `google-cloud-bigquery` client
+- reads `project_id` and `dataset` from `config/environments/dev.yaml`
+- does not read credentials from repo config
+- does not create or require service account key files
+- does not rely on the global `gcloud` project setting
+
+Load extracted observations and health metrics into the configured dataset with:
+
+```bash
+python3 scripts/ingestion/load_extracted_csvs_to_bigquery.py \
+  --environment-config config/environments/dev.yaml \
+  --observations-csv outputs/observations_p001_2026_04_25.csv \
+  --health-metrics-csv outputs/health_metric_p001_2026_04_25.csv \
+  --document-id doc_p001_lab_2026_04_25_tata_1mg_fitness_premium \
+  --person-id p001 \
+  --replace-existing
+```
+
+When `--replace-existing` is provided, the loader deletes existing `observation` and `health_metric` rows for the given `document_id` and `person_id` before inserting the new CSV contents.

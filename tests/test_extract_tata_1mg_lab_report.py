@@ -1,5 +1,7 @@
 import sys
 import unittest
+import csv
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -8,9 +10,12 @@ if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
 from family_health_lake.extraction.tata_1mg_lab_report import (
+    HEALTH_METRIC_FIELDS,
+    OBSERVATION_FIELDS,
     extract_report_data,
     normalize_id_component,
     parse_numeric_value,
+    write_csv,
 )
 
 
@@ -270,6 +275,108 @@ class ExtractTata1mgTshTests(unittest.TestCase):
         self.assertEqual(0.35, tsh["reference_low"])
         self.assertEqual(4.94, tsh["reference_high"])
         self.assertEqual("high", tsh["status"])
+
+
+class ExtractTata1mgCsvWritingTests(unittest.TestCase):
+    def test_csv_round_trip_with_quotes_commas_and_newlines(self):
+        observation_rows = [
+            {
+                "observation_id": "obs_p001_2026-04-25_demo",
+                "person_id": "p001",
+                "document_id": "doc_demo",
+                "observed_at": "2026-04-25",
+                "source": "tata_1mg",
+                "taxonomy": "medical_lab_reports",
+                "observation_type": "lab_result",
+                "raw_label": 'Hemoglobin, "Hb"',
+                "raw_value": "13.4",
+                "normalized_label": "Hemoglobin",
+                "parsed_value": 13.4,
+                "unit": "g/dL",
+                "source_location": "page=1;line=3",
+                "confidence": 0.7,
+                "conversion_status": "unconverted",
+                "raw_text": 'Hemoglobin, "Hb"\n13.4 g/dL',
+                "surrounding_text": "Previous line\nHemoglobin, \"Hb\"\nNext line",
+                "failure_reason": "raw_label_not_mapped",
+                "notes": 'contains, commas "quotes"\nand newlines',
+            },
+            {
+                "observation_id": "obs_p001_2026-04-25_demo_2",
+                "person_id": "p001",
+                "document_id": "doc_demo",
+                "observed_at": "2026-04-25",
+                "source": "tata_1mg",
+                "taxonomy": "medical_lab_reports",
+                "observation_type": "lab_result",
+                "raw_label": "Neutrophils",
+                "raw_value": "45.2",
+                "normalized_label": "Neutrophils",
+                "parsed_value": 45.2,
+                "unit": "%",
+                "source_location": "page=1;line=4",
+                "confidence": 0.7,
+                "conversion_status": "unconverted",
+                "raw_text": "Neutrophils 45.2 %",
+                "surrounding_text": "A, B, C",
+                "failure_reason": "raw_label_not_mapped",
+                "notes": 'simple "quoted" note',
+            },
+        ]
+        metric_rows = [
+            {
+                "metric_id": "m_p001_2026-04-25_tsh",
+                "person_id": "p001",
+                "document_id": "doc_demo",
+                "observation_id": "obs_p001_2026-04-25_tsh",
+                "metric_date": "2026-04-25",
+                "source": "tata_1mg",
+                "category": "thyroid",
+                "metric_name": "TSH",
+                "value": 6.264,
+                "text_value": "",
+                "unit": "µIU/mL",
+                "reference_low": 0.35,
+                "reference_high": 4.94,
+                "status": "high",
+                "notes": 'mapped from "TSH, Ultra Sensitive"\nrange nearby',
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            observations_path = Path(temp_dir) / "observations.csv"
+            metrics_path = Path(temp_dir) / "health_metric.csv"
+            write_csv(observation_rows, OBSERVATION_FIELDS, observations_path)
+            write_csv(metric_rows, HEALTH_METRIC_FIELDS, metrics_path)
+
+            observation_lines = observations_path.read_text(encoding="utf-8").splitlines()
+            metric_lines = metrics_path.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(3, len(observation_lines))
+            self.assertEqual(2, len(metric_lines))
+
+            with observations_path.open("r", encoding="utf-8", newline="") as handle:
+                read_observations = list(csv.DictReader(handle))
+            with metrics_path.open("r", encoding="utf-8", newline="") as handle:
+                read_metrics = list(csv.DictReader(handle))
+
+            self.assertEqual(2, len(read_observations))
+            self.assertEqual(1, len(read_metrics))
+            self.assertEqual(
+                'Hemoglobin, "Hb" 13.4 g/dL',
+                read_observations[0]["raw_text"],
+            )
+            self.assertEqual(
+                'Previous line Hemoglobin, "Hb" Next line',
+                read_observations[0]["surrounding_text"],
+            )
+            self.assertEqual(
+                'contains, commas "quotes" and newlines',
+                read_observations[0]["notes"],
+            )
+            self.assertEqual(
+                'mapped from "TSH, Ultra Sensitive" range nearby',
+                read_metrics[0]["notes"],
+            )
 
 
 if __name__ == "__main__":
