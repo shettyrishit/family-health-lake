@@ -1,0 +1,16 @@
+environment: dev
+
+gcp:
+  project_id: project-b01843b0-70b0-47d0-af0
+  region: asia-south1
+
+storage:
+  raw_bucket: fhl-raw-bucket-1
+  raw_prefix: raw/
+  curated_prefix: curated/
+
+bigquery:
+  dataset: health_os
+
+default_person:
+  person_id: p001

@@ -1,0 +1,29 @@
+taxonomies:
+  - id: training_activity
+    label: Training & Activity
+    description: Workouts, steps, activity minutes, VO2 max, strength sessions, Zone 2, intervals.
+
+  - id: recovery_sleep
+    label: Recovery & Sleep
+    description: Sleep, HRV, resting heart rate, stress, body battery, recovery state.
+
+  - id: nutrition_supplements
+    label: Nutrition & Supplements
+    description: Food, protein, hydration, supplements, medication routines where relevant.
+
+  - id: body_composition
+    label: Body Composition
+    description: Weight, waist, body fat, muscle mass, visceral fat, BMI, BMR.
+
+  - id: medical_lab_reports
+    label: Medical & Lab Reports
+    description: Blood work, thyroid, lipids, glucose, vitamins, imaging, prescriptions, doctor notes.
+
+  - id: symptoms_notes
+    label: Symptoms & Notes
+    description: Pain, fatigue, mood, digestion, illness, subjective notes, recovery observations.
+
+system_taxonomies:
+  - id: unidentified
+    label: Unidentified
+    description: Data that could not be classified and requires process improvement.

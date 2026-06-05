@@ -1,0 +1,128 @@
+source: tata_1mg
+taxonomy: medical_lab_reports
+
+metrics:
+  "Thyroid Stimulating Hormone - Ultra Sensitive":
+    standard_name: TSH
+    category: thyroid
+    unit: "µIU/mL"
+
+  "Thyroid Stimulating Hormone - Ultrasensitive":
+    standard_name: TSH
+    category: thyroid
+    unit: "µIU/mL"
+
+  "Free T4":
+    standard_name: Free T4
+    category: thyroid
+    unit: "ng/dL"
+
+  "Free T3":
+    standard_name: Free T3
+    category: thyroid
+    unit: "pg/mL"
+
+  "T3, Total":
+    standard_name: Total T3
+    category: thyroid
+    unit: "ng/mL"
+
+  "T4, Total":
+    standard_name: Total T4
+    category: thyroid
+    unit: "µg/dL"
+
+  "Anti-Thyroid Peroxidase":
+    standard_name: Anti-TPO Antibody
+    category: thyroid
+    unit: "IU/mL"
+
+  "Anti Thyroglobulin Antibody":
+    standard_name: Anti-Tg Antibody
+    category: thyroid
+    unit: "IU/mL"
+
+  "Vitamin B12":
+    standard_name: Vitamin B12
+    category: vitamins
+    unit: "pg/mL"
+
+  "25-hydroxyvitamin D Total":
+    standard_name: Vitamin D Total
+    category: vitamins
+    unit: "ng/mL"
+
+  "Ferritin":
+    standard_name: Ferritin
+    category: iron
+    unit: "ng/mL"
+
+  "Glycosylated Hemoglobin (HbA1c)":
+    standard_name: HbA1c
+    category: metabolic
+    unit: "%"
+
+  "Glucose - Fasting":
+    standard_name: Fasting Glucose
+    category: metabolic
+    unit: "mg/dL"
+
+  "Cholesterol - Total":
+    standard_name: Total Cholesterol
+    category: lipids
+    unit: "mg/dL"
+
+  "Cholesterol - LDL":
+    standard_name: LDL Cholesterol
+    category: lipids
+    unit: "mg/dL"
+
+  "Cholesterol - HDL":
+    standard_name: HDL Cholesterol
+    category: lipids
+    unit: "mg/dL"
+
+  "Triglycerides":
+    standard_name: Triglycerides
+    category: lipids
+    unit: "mg/dL"
+
+  "Non HDL Cholesterol":
+    standard_name: Non-HDL Cholesterol
+    category: lipids
+    unit: "mg/dL"
+
+  "Apolipoprotein - B":
+    standard_name: Apolipoprotein B
+    category: cardiac
+    unit: "mg/dL"
+
+  "Lipoprotein(a)":
+    standard_name: Lipoprotein(a)
+    category: cardiac
+    unit: "mg/dL"
+
+  "Creatinine":
+    standard_name: Creatinine
+    category: kidney
+    unit: "mg/dL"
+
+  "Glomerular Filtration Rate (estimated)":
+    standard_name: eGFR
+    category: kidney
+    unit: "mL/min/1.73m2"
+
+  "Alanine Transaminase":
+    standard_name: ALT/SGPT
+    category: liver
+    unit: "U/L"
+
+  "Aspartate Transaminase":
+    standard_name: AST/SGOT
+    category: liver
+    unit: "U/L"
+
+  "High sensitivity CRP":
+    standard_name: hs-CRP
+    category: inflammation
+    unit: "mg/L"
