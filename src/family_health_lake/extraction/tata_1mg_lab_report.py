@@ -26,6 +26,9 @@ OBSERVATION_FIELDS = [
     "source_location",
     "confidence",
     "conversion_status",
+    "raw_text",
+    "surrounding_text",
+    "failure_reason",
     "notes",
 ]
 
@@ -62,6 +65,38 @@ UNIT_CLEANUP_RE = re.compile(r"^[\s:;,-]+|[\s:;,-]+$")
 ONE_SIDED_RANGE_RE = re.compile(
     r"(?P<comparator><=|>=|<|>)\s*(?P<number>\d+(?:,\d{3})*(?:\.\d+)?)"
 )
+NOISE_PREFIXES = (
+    "customer name",
+    "comment:",
+    "report date",
+    "sample type",
+    "this test has been performed at",
+    "method",
+)
+NOISE_CONTAINS = (
+    "page ",
+    "report generated",
+    "laboratory",
+    "lab address",
+    "reference lab",
+)
+KNOWN_UNITS = {
+    "mg/dl",
+    "ng/dl",
+    "pg/ml",
+    "iu/ml",
+    "u/l",
+    "µiu/ml",
+    "ml/min/1.73m2",
+    "%",
+    "g/dl",
+    "mili/cu.mm",
+    "million/cu.mm",
+    "lakhs/cu.mm",
+    "cells/cu.mm",
+    "fl",
+    "pg",
+}
 
 
 @dataclass(frozen=True)
@@ -97,11 +132,29 @@ class ValueContext:
     token_end: int
 
 
+@dataclass(frozen=True)
+class UnmappedLabResultCandidate:
+    raw_label: str
+    parsed_value: ParsedValue
+    unit: Optional[str]
+    reference_low: Optional[float]
+    reference_high: Optional[float]
+    reference_range_text: Optional[str]
+    last_consumed_offset: int
+    failure_reason: str
+
+
 def normalize_id_component(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value)
     ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
     snake_case = re.sub(r"[^a-zA-Z0-9]+", "_", ascii_value.lower()).strip("_")
     return re.sub(r"_+", "_", snake_case)
+
+
+def _normalize_label_for_matching(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-zA-Z0-9]+", "", ascii_value.casefold())
 
 
 def parse_numeric_value(raw_value: str) -> ParsedValue:
@@ -212,9 +265,9 @@ def _iter_page_lines(page_texts: Sequence[Dict[str, Any]]) -> List[PageLine]:
 
 
 def _find_mapping_label(text: str, metric_specs: Dict[str, Dict[str, str]]) -> Optional[str]:
-    lowered = text.casefold()
+    normalized_text = _normalize_label_for_matching(text)
     for raw_label in sorted(metric_specs, key=len, reverse=True):
-        if raw_label.casefold() in lowered:
+        if _normalize_label_for_matching(raw_label) in normalized_text:
             return raw_label
     return None
 
@@ -347,6 +400,9 @@ def _build_observation_row(
     source_location: str,
     confidence: float,
     conversion_status: str,
+    raw_text: str = "",
+    surrounding_text: str = "",
+    failure_reason: str = "",
     notes: str,
 ) -> Dict[str, Any]:
     return {
@@ -365,6 +421,9 @@ def _build_observation_row(
         "source_location": source_location,
         "confidence": confidence,
         "conversion_status": conversion_status,
+        "raw_text": raw_text,
+        "surrounding_text": surrounding_text,
+        "failure_reason": failure_reason,
         "notes": notes,
     }
 
@@ -416,6 +475,55 @@ def _collect_candidate_lines(
     return candidate_lines
 
 
+def _build_raw_text(candidate_lines: Sequence[PageLine], last_consumed_offset: int) -> str:
+    consumed_lines = candidate_lines[: last_consumed_offset + 1]
+    return "\n".join(line.text for line in consumed_lines)
+
+
+def _build_surrounding_text(lines: Sequence[PageLine], start_index: int, end_index: int) -> str:
+    first_index = max(0, start_index - 1)
+    last_index = min(len(lines) - 1, end_index + 1)
+    return "\n".join(lines[index].text for index in range(first_index, last_index + 1))
+
+
+def _looks_like_noise(text: str) -> bool:
+    lowered = text.casefold()
+    if lowered.startswith(NOISE_PREFIXES):
+        return True
+    if re.search(r"page\s+\d+\s+of\s+\d+", lowered):
+        return True
+    if any(token in lowered for token in NOISE_CONTAINS):
+        return True
+    if len(lowered.split()) >= 10 and not LAB_RESULT_SIGNAL_RE.search(text):
+        return True
+    return False
+
+
+def _looks_like_plausible_lab_label(text: str) -> bool:
+    label = text.strip(" :-")
+    if not label or len(label) > 80:
+        return False
+    if _looks_like_noise(label):
+        return False
+    if not re.search(r"[A-Za-z]{2,}", label):
+        return False
+    if any(char in label for char in "@#[]{}"):
+        return False
+    if len(label.split()) > 6:
+        return False
+    return True
+
+
+def _extract_unit_from_text(text: str) -> Optional[str]:
+    cleaned = UNIT_CLEANUP_RE.sub("", text).strip()
+    if not cleaned:
+        return None
+    lowered = cleaned.casefold()
+    if lowered in {unit.casefold() for unit in KNOWN_UNITS}:
+        return cleaned
+    return None
+
+
 def _parse_mapped_metric_window(
     raw_label: str,
     candidate_lines: Sequence[PageLine],
@@ -459,6 +567,63 @@ def _parse_mapped_metric_window(
         }
 
     return None
+
+
+def _parse_unmapped_lab_result_window(
+    candidate_lines: Sequence[PageLine],
+) -> Optional[UnmappedLabResultCandidate]:
+    label_line = candidate_lines[0].text.strip()
+    same_line = _extract_label_and_value(label_line)
+    if same_line and _looks_like_plausible_lab_label(same_line["label"]):
+        parsed_value: ParsedValue = same_line["parsed_value"]
+        return UnmappedLabResultCandidate(
+            raw_label=same_line["label"],
+            parsed_value=parsed_value,
+            unit=same_line["unit"],
+            reference_low=same_line["reference_low"],
+            reference_high=same_line["reference_high"],
+            reference_range_text=same_line["reference_range_text"],
+            last_consumed_offset=0,
+            failure_reason="raw_label_not_mapped",
+        )
+
+    if not _looks_like_plausible_lab_label(label_line):
+        return None
+
+    value_context: Optional[ValueContext] = None
+    value_offset: Optional[int] = None
+    reference_range: Optional[ReferenceRange] = None
+    reference_offset: Optional[int] = None
+
+    for line_offset, candidate_line in enumerate(candidate_lines[1:], start=1):
+        value_context = _extract_value_context(candidate_line.text)
+        if value_context:
+            value_offset = line_offset
+            reference_range = value_context.reference_range
+            reference_offset = line_offset if reference_range else None
+            break
+
+    if not value_context or value_offset is None:
+        return None
+
+    if not reference_range:
+        for line_offset, candidate_line in enumerate(candidate_lines[value_offset + 1 :], start=value_offset + 1):
+            reference_range = _parse_reference_range(candidate_line.text)
+            if reference_range:
+                reference_offset = line_offset
+                break
+
+    last_consumed_offset = max(value_offset, reference_offset or value_offset)
+    return UnmappedLabResultCandidate(
+        raw_label=label_line.strip(" :-"),
+        parsed_value=value_context.parsed_value,
+        unit=value_context.unit or _extract_unit_from_text(candidate_lines[value_offset].text),
+        reference_low=reference_range.low if reference_range else None,
+        reference_high=reference_range.high if reference_range else None,
+        reference_range_text=reference_range.text if reference_range else None,
+        last_consumed_offset=last_consumed_offset,
+        failure_reason="raw_label_not_mapped",
+    )
 
 
 def extract_mapped_observations(
@@ -537,6 +702,8 @@ def extract_mapped_observations(
             source_location=source_location,
             confidence=1.0 if consumed_lines == 1 else 0.95,
             conversion_status="converted",
+            raw_text=_build_raw_text(candidate_lines, consumed_lines - 1),
+            surrounding_text=_build_surrounding_text(lines, index, index + consumed_lines - 1),
             notes="; ".join(notes_parts),
         )
         observations.append(observation)
@@ -665,14 +832,66 @@ def capture_unconverted_observations(
     lines = _iter_page_lines(page_texts)
     observations: List[Dict[str, Any]] = []
     skipped_lines_count = 0
+    skipped_noise_count = 0
 
-    for line in lines:
+    line_index = 0
+    while line_index < len(lines):
+        line = lines[line_index]
         line_key = (line.page_number, line.line_number)
         if line_key in used_lines:
+            line_index += 1
+            continue
+
+        if _looks_like_noise(line.text):
+            skipped_lines_count += 1
+            skipped_noise_count += 1
+            line_index += 1
+            continue
+
+        candidate_lines = _collect_candidate_lines(lines, line_index, metric_specs, max_lines=3)
+        unmapped_candidate = _parse_unmapped_lab_result_window(candidate_lines)
+        if unmapped_candidate:
+            last_index = line_index + unmapped_candidate.last_consumed_offset
+            observation_id = _make_deterministic_id(
+                "obs",
+                person_id,
+                metric_date,
+                unmapped_candidate.raw_label,
+                observation_id_tracker,
+            )
+            notes = []
+            if unmapped_candidate.reference_range_text:
+                notes.append(f"reference_range={unmapped_candidate.reference_range_text}")
+            notes.append("no_mapping_found")
+            observations.append(
+                _build_observation_row(
+                    observation_id=observation_id,
+                    person_id=person_id,
+                    document_id=document_id,
+                    observed_at=metric_date,
+                    source=source,
+                    taxonomy=taxonomy,
+                    observation_type="lab_result",
+                    raw_label=unmapped_candidate.raw_label,
+                    raw_value=unmapped_candidate.parsed_value.raw_value,
+                    normalized_label=unmapped_candidate.raw_label,
+                    parsed_value=unmapped_candidate.parsed_value.parsed_value,
+                    unit=unmapped_candidate.unit,
+                    source_location=f"page={line.page_number};line={line.line_number}-{candidate_lines[unmapped_candidate.last_consumed_offset].line_number}",
+                    confidence=0.7 if unmapped_candidate.last_consumed_offset else 0.65,
+                    conversion_status="unconverted",
+                    raw_text=_build_raw_text(candidate_lines, unmapped_candidate.last_consumed_offset),
+                    surrounding_text=_build_surrounding_text(lines, line_index, last_index),
+                    failure_reason=unmapped_candidate.failure_reason,
+                    notes="; ".join(notes),
+                )
+            )
+            line_index = last_index + 1
             continue
 
         if not LAB_RESULT_SIGNAL_RE.search(line.text):
             skipped_lines_count += 1
+            line_index += 1
             continue
 
         matching_mapping_label = _find_mapping_label(line.text, metric_specs)
@@ -715,9 +934,13 @@ def capture_unconverted_observations(
                     source_location=f"page={line.page_number};line={line.line_number}",
                     confidence=0.65,
                     conversion_status="unconverted",
+                    raw_text=line.text,
+                    surrounding_text=_build_surrounding_text(lines, line_index, line_index),
+                    failure_reason="raw_label_not_mapped" if not matching_mapping_label else "",
                     notes="; ".join(notes),
                 )
             )
+            line_index += 1
             continue
 
         value_match = VALUE_RE.search(line.text)
@@ -747,14 +970,19 @@ def capture_unconverted_observations(
                     source_location=f"page={line.page_number};line={line.line_number}",
                     confidence=0.35,
                     conversion_status="unidentified",
+                    raw_text=line.text,
+                    surrounding_text=_build_surrounding_text(lines, line_index, line_index),
+                    failure_reason="unable_to_classify",
                     notes="lab-like line could not be classified",
                 )
             )
+            line_index += 1
             continue
 
         skipped_lines_count += 1
+        line_index += 1
 
-    return observations, skipped_lines_count
+    return observations, skipped_lines_count, skipped_noise_count
 
 
 def write_csv(
@@ -810,7 +1038,7 @@ def extract_report_data(
     )
     duplicate_observations_skipped = health_metrics[1]
     health_metrics_rows = health_metrics[0]
-    unconverted_observations, skipped_lines_count = capture_unconverted_observations(
+    unconverted_observations, skipped_lines_count, skipped_noise_count = capture_unconverted_observations(
         page_texts,
         mappings,
         person_id=person_id,
@@ -823,6 +1051,13 @@ def extract_report_data(
     unconverted_count = sum(
         1 for row in unconverted_observations if row["conversion_status"] == "unconverted"
     )
+    unmapped_lab_result_count = sum(
+        1
+        for row in unconverted_observations
+        if row["conversion_status"] == "unconverted"
+        and row["failure_reason"] == "raw_label_not_mapped"
+        and row["taxonomy"] == mappings.get("taxonomy", "")
+    )
     unidentified_count = sum(
         1 for row in unconverted_observations if row["conversion_status"] == "unidentified"
     )
@@ -831,7 +1066,9 @@ def extract_report_data(
         "mapped_metrics_found": len(observations),
         "health_metrics_created": len(health_metrics_rows),
         "unconverted_observations_count": unconverted_count,
+        "unmapped_lab_result_count": unmapped_lab_result_count,
         "unidentified_count": unidentified_count,
+        "skipped_noise_count": skipped_noise_count,
         "duplicate_observations_skipped": duplicate_observations_skipped,
         "skipped_lines_count": skipped_lines_count,
         "warnings": warnings,

@@ -18,6 +18,12 @@ FIXTURE_PATH = Path(__file__).parent / "fixtures" / "tata_1mg_lab_report_fake.tx
 DUPLICATE_RANGE_FIXTURE_PATH = (
     Path(__file__).parent / "fixtures" / "tata_1mg_lab_report_duplicates_and_ranges_fake.txt"
 )
+UNMAPPED_NOISE_FIXTURE_PATH = (
+    Path(__file__).parent / "fixtures" / "tata_1mg_lab_report_unmapped_and_noise_fake.txt"
+)
+TSH_SPLIT_FIXTURE_PATH = (
+    Path(__file__).parent / "fixtures" / "tata_1mg_lab_report_tsh_split_fake.txt"
+)
 MAPPING_PATH = (
     REPO_ROOT
     / "config"
@@ -109,7 +115,9 @@ class ExtractTata1mgLabReportTests(unittest.TestCase):
 
         self.assertEqual(2, len(unconverted))
         self.assertEqual(1, report["unconverted_observations_count"])
+        self.assertEqual(1, report["unmapped_lab_result_count"])
         self.assertEqual(1, report["unidentified_count"])
+        self.assertEqual(0, report["skipped_noise_count"])
         self.assertEqual(0, report["duplicate_observations_skipped"])
         self.assertEqual(3, report["skipped_lines_count"])
         self.assertEqual(3, report["mapped_metrics_found"])
@@ -193,7 +201,75 @@ class ExtractTata1mgDeduplicationAndRangeTests(unittest.TestCase):
         self.assertEqual(4, report["health_metrics_created"])
         self.assertEqual(1, report["duplicate_observations_skipped"])
         self.assertEqual(0, report["unconverted_observations_count"])
+        self.assertEqual(0, report["unmapped_lab_result_count"])
         self.assertEqual(0, report["unidentified_count"])
+        self.assertEqual(0, report["skipped_noise_count"])
+
+
+class ExtractTata1mgUnmappedAndNoiseTests(unittest.TestCase):
+    def setUp(self):
+        self.extraction = extract_report_data(
+            page_texts=load_pages_from_fixture(UNMAPPED_NOISE_FIXTURE_PATH),
+            person_id="p001",
+            document_id="doc_p001_lab_2026_04_25_tata_1mg_unmapped_fake",
+            metric_date="2026-04-25",
+            mapping_path=MAPPING_PATH,
+        )
+
+    def test_unmapped_lab_rows_become_unconverted_medical_lab_reports(self):
+        unconverted = self.extraction["unconverted_observations"]
+
+        hemoglobin = next(row for row in unconverted if row["raw_label"] == "Hemoglobin")
+        self.assertEqual("medical_lab_reports", hemoglobin["taxonomy"])
+        self.assertEqual("lab_result", hemoglobin["observation_type"])
+        self.assertEqual("unconverted", hemoglobin["conversion_status"])
+        self.assertEqual("raw_label_not_mapped", hemoglobin["failure_reason"])
+        self.assertEqual("Hemoglobin 13.4 g/dL 13.0 - 17.0", hemoglobin["raw_text"])
+        self.assertIn("Comment:", hemoglobin["surrounding_text"])
+        self.assertIn("Neutrophils 45.2 % 40 - 80", hemoglobin["surrounding_text"])
+
+        neutrophils = next(row for row in unconverted if row["raw_label"] == "Neutrophils")
+        self.assertEqual("medical_lab_reports", neutrophils["taxonomy"])
+        self.assertEqual("unconverted", neutrophils["conversion_status"])
+        self.assertEqual("raw_label_not_mapped", neutrophils["failure_reason"])
+
+    def test_noise_lines_are_skipped(self):
+        unconverted_text = "\n".join(
+            row["raw_text"] for row in self.extraction["unconverted_observations"]
+        )
+        self.assertNotIn("Customer Name", unconverted_text)
+        self.assertNotIn("Comment:", unconverted_text)
+        self.assertNotIn("Page 11 of 39", unconverted_text)
+
+    def test_report_counts_for_unmapped_and_noise(self):
+        report = self.extraction["report"]
+
+        self.assertEqual(3, report["unconverted_observations_count"])
+        self.assertEqual(3, report["unmapped_lab_result_count"])
+        self.assertEqual(0, report["unidentified_count"])
+        self.assertEqual(4, report["skipped_noise_count"])
+
+
+class ExtractTata1mgTshTests(unittest.TestCase):
+    def test_tsh_split_across_lines_is_mapped(self):
+        extraction = extract_report_data(
+            page_texts=load_pages_from_fixture(TSH_SPLIT_FIXTURE_PATH),
+            person_id="p001",
+            document_id="doc_p001_lab_2026_04_25_tata_1mg_tsh_fake",
+            metric_date="2026-04-25",
+            mapping_path=MAPPING_PATH,
+        )
+
+        metric_by_name = {
+            row["metric_name"]: row for row in extraction["health_metrics"]
+        }
+        tsh = metric_by_name["TSH"]
+
+        self.assertEqual(6.264, tsh["value"])
+        self.assertEqual("µIU/mL", tsh["unit"])
+        self.assertEqual(0.35, tsh["reference_low"])
+        self.assertEqual(4.94, tsh["reference_high"])
+        self.assertEqual("high", tsh["status"])
 
 
 if __name__ == "__main__":

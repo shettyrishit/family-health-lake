@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS `project-b01843b0-70b0-47d0-af0.health_os.observation
                                                                                       source_location STRING,
                                                                                       confidence FLOAT64,
                                                                                       conversion_status STRING,
+                                                                                      raw_text STRING,
+                                                                                      surrounding_text STRING,
+                                                                                      failure_reason STRING,
                                                                                       notes STRING,
                                                                                       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
     );

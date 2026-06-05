@@ -12,6 +12,26 @@ metrics:
     category: thyroid
     unit: "µIU/mL"
 
+  "Thyroid Stimulating Hormone":
+    standard_name: TSH
+    category: thyroid
+    unit: "µIU/mL"
+
+  "TSH":
+    standard_name: TSH
+    category: thyroid
+    unit: "µIU/mL"
+
+  "TSH - Ultra Sensitive":
+    standard_name: TSH
+    category: thyroid
+    unit: "µIU/mL"
+
+  "TSH Ultrasensitive":
+    standard_name: TSH
+    category: thyroid
+    unit: "µIU/mL"
+
   "Free T4":
     standard_name: Free T4
     category: thyroid

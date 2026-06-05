@@ -21,6 +21,9 @@ This file defines the CSV contract for extracted observations before they are co
 | source_location | Page, section, line, or source pointer where available |
 | confidence | Extraction confidence from 0 to 1 |
 | conversion_status | `converted`, `unconverted`, or `unidentified` |
+| raw_text | Exact extracted line or block that triggered capture |
+| surrounding_text | Small nearby context window, ideally previous/current/next lines |
+| failure_reason | Why conversion/classification failed, e.g. `raw_label_not_mapped`, `value_parse_failed`, `reference_range_parse_failed`, `unable_to_classify` |
 | notes | Additional context |
 
 ## Purpose
