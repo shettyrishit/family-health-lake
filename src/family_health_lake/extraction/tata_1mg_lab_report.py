@@ -59,6 +59,9 @@ LAB_RESULT_SIGNAL_RE = re.compile(
     re.IGNORECASE,
 )
 UNIT_CLEANUP_RE = re.compile(r"^[\s:;,-]+|[\s:;,-]+$")
+ONE_SIDED_RANGE_RE = re.compile(
+    r"(?P<comparator><=|>=|<|>)\s*(?P<number>\d+(?:,\d{3})*(?:\.\d+)?)"
+)
 
 
 @dataclass(frozen=True)
@@ -74,6 +77,24 @@ class ParsedValue:
     parsed_value: Optional[float]
     comparator: Optional[str]
     text_value: Optional[str]
+
+
+@dataclass(frozen=True)
+class ReferenceRange:
+    low: Optional[float]
+    high: Optional[float]
+    text: str
+    start: int
+    end: int
+
+
+@dataclass(frozen=True)
+class ValueContext:
+    parsed_value: ParsedValue
+    unit: Optional[str]
+    reference_range: Optional[ReferenceRange]
+    token_start: int
+    token_end: int
 
 
 def normalize_id_component(value: str) -> str:
@@ -199,12 +220,44 @@ def _find_mapping_label(text: str, metric_specs: Dict[str, Dict[str, str]]) -> O
 
 
 def _extract_reference_range(text: str) -> Tuple[Optional[float], Optional[float], Optional[str]]:
-    match = RANGE_RE.search(text)
-    if not match:
+    parsed_range = _parse_reference_range(text)
+    if not parsed_range:
         return None, None, None
 
-    range_text = match.group(0)
-    return float(match.group("low")), float(match.group("high")), range_text
+    return parsed_range.low, parsed_range.high, parsed_range.text
+
+
+def _parse_reference_range(text: str) -> Optional[ReferenceRange]:
+    range_match = RANGE_RE.search(text)
+    if range_match:
+        return ReferenceRange(
+            low=float(range_match.group("low")),
+            high=float(range_match.group("high")),
+            text=range_match.group(0),
+            start=range_match.start(),
+            end=range_match.end(),
+        )
+
+    one_sided_match = ONE_SIDED_RANGE_RE.search(text)
+    if not one_sided_match:
+        return None
+
+    comparator = one_sided_match.group("comparator")
+    number = float(one_sided_match.group("number").replace(",", ""))
+    if comparator in {"<", "<="}:
+        low = None
+        high = number
+    else:
+        low = number
+        high = None
+
+    return ReferenceRange(
+        low=low,
+        high=high,
+        text=one_sided_match.group(0),
+        start=one_sided_match.start(),
+        end=one_sided_match.end(),
+    )
 
 
 def _find_measurement_value_match(text: str) -> Optional[re.Match[str]]:
@@ -231,35 +284,49 @@ def _find_measurement_value_match(text: str) -> Optional[re.Match[str]]:
     return None
 
 
-def _extract_label_and_value(text: str) -> Optional[Dict[str, Any]]:
+def _extract_value_context(text: str) -> Optional[ValueContext]:
     value_match = _find_measurement_value_match(text)
     if not value_match:
         return None
 
-    label = text[: value_match.start()].strip(" :-")
+    token_start = value_match.start("comparator") if value_match.group("comparator") else value_match.start("number")
+    token_end = value_match.end("number")
+    raw_value = value_match.group(0).strip()
+    parsed_value = parse_numeric_value(raw_value)
+    remainder = text[token_end:]
+    reference_range = _parse_reference_range(remainder)
+
+    unit_end = len(text)
+    if reference_range:
+        unit_end = token_end + reference_range.start
+
+    unit = UNIT_CLEANUP_RE.sub("", text[token_end:unit_end]).strip()
+    return ValueContext(
+        parsed_value=parsed_value,
+        unit=unit or None,
+        reference_range=reference_range,
+        token_start=token_start,
+        token_end=token_end,
+    )
+
+
+def _extract_label_and_value(text: str) -> Optional[Dict[str, Any]]:
+    value_context = _extract_value_context(text)
+    if not value_context:
+        return None
+
+    label = text[: value_context.token_start].strip(" :-")
     if not re.search(r"[A-Za-z]{2,}", label):
         return None
 
-    raw_value = value_match.group(0).strip()
-    parsed_value = parse_numeric_value(raw_value)
-    reference_low, reference_high, reference_range_text = _extract_reference_range(
-        text[value_match.end() :]
-    )
-
-    unit_end = len(text)
-    if reference_range_text:
-        range_match = RANGE_RE.search(text[value_match.end() :])
-        if range_match:
-            unit_end = value_match.end() + range_match.start()
-
-    unit = UNIT_CLEANUP_RE.sub("", text[value_match.end() :unit_end]).strip()
+    reference_range = value_context.reference_range
     return {
         "label": label,
-        "parsed_value": parsed_value,
-        "unit": unit or None,
-        "reference_low": reference_low,
-        "reference_high": reference_high,
-        "reference_range_text": reference_range_text,
+        "parsed_value": value_context.parsed_value,
+        "unit": value_context.unit,
+        "reference_low": reference_range.low if reference_range else None,
+        "reference_high": reference_range.high if reference_range else None,
+        "reference_range_text": reference_range.text if reference_range else None,
     }
 
 
@@ -317,6 +384,83 @@ def _make_deterministic_id(
     return f"{base}_{count}"
 
 
+def _is_metric_repeatable(metric_spec: Dict[str, Any]) -> bool:
+    repeatable = metric_spec.get("repeatable", False)
+    if isinstance(repeatable, bool):
+        return repeatable
+    if isinstance(repeatable, str):
+        return repeatable.strip().lower() in {"1", "true", "yes", "y"}
+    return bool(repeatable)
+
+
+def _collect_candidate_lines(
+    lines: Sequence[PageLine],
+    start_index: int,
+    metric_specs: Dict[str, Dict[str, Any]],
+    max_lines: int = 6,
+) -> List[PageLine]:
+    anchor_line = lines[start_index]
+    candidate_lines = [anchor_line]
+
+    for next_line in lines[start_index + 1 :]:
+        if len(candidate_lines) >= max_lines:
+            break
+        if next_line.page_number != anchor_line.page_number:
+            break
+        if next_line.line_number != candidate_lines[-1].line_number + 1:
+            break
+        if _find_mapping_label(next_line.text, metric_specs):
+            break
+        candidate_lines.append(next_line)
+
+    return candidate_lines
+
+
+def _parse_mapped_metric_window(
+    raw_label: str,
+    candidate_lines: Sequence[PageLine],
+) -> Optional[Dict[str, Any]]:
+    label_line = candidate_lines[0]
+    label_position = label_line.text.casefold().find(raw_label.casefold())
+    if label_position < 0:
+        return None
+
+    segments: List[Tuple[int, str]] = []
+    trailing_text = label_line.text[label_position + len(raw_label) :].strip()
+    if trailing_text:
+        segments.append((0, trailing_text))
+
+    for line_offset, candidate_line in enumerate(candidate_lines[1:], start=1):
+        segments.append((line_offset, candidate_line.text))
+
+    for segment_index, segment_text in segments:
+        value_context = _extract_value_context(segment_text)
+        if not value_context:
+            continue
+
+        reference_range = value_context.reference_range
+        reference_line_offset = segment_index
+        if not reference_range:
+            for next_offset, next_text in segments:
+                if next_offset <= segment_index:
+                    continue
+                reference_range = _parse_reference_range(next_text.strip())
+                if reference_range:
+                    reference_line_offset = next_offset
+                    break
+
+        return {
+            "parsed_value": value_context.parsed_value,
+            "unit": value_context.unit,
+            "reference_low": reference_range.low if reference_range else None,
+            "reference_high": reference_range.high if reference_range else None,
+            "reference_range_text": reference_range.text if reference_range else None,
+            "last_consumed_offset": max(segment_index, reference_line_offset),
+        }
+
+    return None
+
+
 def extract_mapped_observations(
     page_texts: Sequence[Dict[str, Any]],
     mappings: Dict[str, Any],
@@ -344,25 +488,9 @@ def extract_mapped_observations(
         if not raw_label:
             continue
 
-        candidate_lines = [line]
-        if index + 1 < len(lines):
-            next_line = lines[index + 1]
-            if next_line.page_number == line.page_number and next_line.line_number == line.line_number + 1:
-                candidate_lines.append(next_line)
-
-        parsed_row: Optional[Dict[str, Any]] = None
-        consumed_lines = 1
-        for candidate_count in (1, 2):
-            candidate_text = " ".join(item.text for item in candidate_lines[:candidate_count])
-            label_position = candidate_text.casefold().find(raw_label.casefold())
-            if label_position < 0:
-                continue
-            trailing_text = candidate_text[label_position + len(raw_label) :]
-            parsed_candidate = _extract_label_and_value(f"{raw_label} {trailing_text}")
-            if parsed_candidate:
-                parsed_row = parsed_candidate
-                consumed_lines = candidate_count
-                break
+        candidate_lines = _collect_candidate_lines(lines, index, metric_specs)
+        parsed_row = _parse_mapped_metric_window(raw_label, candidate_lines)
+        consumed_lines = (parsed_row["last_consumed_offset"] + 1) if parsed_row else 1
 
         if not parsed_row:
             warnings.append(
@@ -382,6 +510,8 @@ def extract_mapped_observations(
         source_location = f"page={line.page_number};line={line.line_number}"
         if consumed_lines == 2:
             source_location = f"page={line.page_number};line={line.line_number}-{line.line_number + 1}"
+        elif consumed_lines > 2:
+            source_location = f"page={line.page_number};line={line.line_number}-{line.line_number + consumed_lines - 1}"
 
         parsed_value: ParsedValue = parsed_row["parsed_value"]
         unit = metric_spec.get("unit") or parsed_row.get("unit")
@@ -420,6 +550,7 @@ def extract_mapped_observations(
                 "reference_high": parsed_row["reference_high"],
                 "text_value": parsed_value.text_value,
                 "parsed_value": parsed_value.parsed_value,
+                "repeatable": _is_metric_repeatable(metric_spec),
             }
         )
 
@@ -432,11 +563,13 @@ def extract_mapped_observations(
 def _determine_status(
     value: Optional[float], reference_low: Optional[float], reference_high: Optional[float]
 ) -> str:
-    if value is None or reference_low is None or reference_high is None:
+    if value is None:
         return "tracked"
-    if value < reference_low:
+    if reference_low is None and reference_high is None:
+        return "tracked"
+    if reference_low is not None and value < reference_low:
         return "low"
-    if value > reference_high:
+    if reference_high is not None and value > reference_high:
         return "high"
     return "normal"
 
@@ -449,11 +582,38 @@ def build_health_metrics(
     metric_date: str,
     metric_id_tracker: Dict[str, int],
     source: str,
-) -> List[Dict[str, Any]]:
+    warnings: List[str],
+) -> Tuple[List[Dict[str, Any]], int]:
     metrics: List[Dict[str, Any]] = []
+    seen_records: Dict[Tuple[str, str, str, str], Dict[str, Any]] = {}
+    seen_signatures: Dict[Tuple[str, str, str, str], set[Tuple[Optional[float], str, str]]] = {}
+    duplicate_observations_skipped = 0
+
     for record in mapped_records:
         observation = record["observation"]
         metric_name = record["metric_name"]
+        metric_key = (person_id, document_id, metric_date, metric_name)
+        duplicate_signature = (
+            record["parsed_value"],
+            record["text_value"] or "",
+            record["unit"],
+        )
+        existing_record = seen_records.get(metric_key)
+        is_repeatable = bool(record.get("repeatable"))
+        metric_signatures = seen_signatures.setdefault(metric_key, set())
+
+        if duplicate_signature in metric_signatures:
+            duplicate_observations_skipped += 1
+            continue
+        if existing_record and not is_repeatable:
+            duplicate_observations_skipped += 1
+            warnings.append(
+                f"Skipped conflicting duplicate for metric '{metric_name}' in document '{document_id}'. "
+                f"Kept observation '{existing_record['observation']['observation_id']}' and skipped "
+                f"'{observation['observation_id']}'."
+            )
+            continue
+
         metric_id = _make_deterministic_id(
             "m",
             person_id,
@@ -461,30 +621,32 @@ def build_health_metrics(
             metric_name,
             metric_id_tracker,
         )
-        metrics.append(
-            {
-                "metric_id": metric_id,
-                "person_id": person_id,
-                "document_id": document_id,
-                "observation_id": observation["observation_id"],
-                "metric_date": metric_date,
-                "source": source,
-                "category": record["category"],
-                "metric_name": metric_name,
-                "value": record["parsed_value"],
-                "text_value": record["text_value"] or "",
-                "unit": record["unit"],
-                "reference_low": record["reference_low"],
-                "reference_high": record["reference_high"],
-                "status": _determine_status(
-                    record["parsed_value"],
-                    record["reference_low"],
-                    record["reference_high"],
-                ),
-                "notes": observation["notes"],
-            }
-        )
-    return metrics
+        metric_row = {
+            "metric_id": metric_id,
+            "person_id": person_id,
+            "document_id": document_id,
+            "observation_id": observation["observation_id"],
+            "metric_date": metric_date,
+            "source": source,
+            "category": record["category"],
+            "metric_name": metric_name,
+            "value": record["parsed_value"],
+            "text_value": record["text_value"] or "",
+            "unit": record["unit"],
+            "reference_low": record["reference_low"],
+            "reference_high": record["reference_high"],
+            "status": _determine_status(
+                record["parsed_value"],
+                record["reference_low"],
+                record["reference_high"],
+            ),
+            "notes": observation["notes"],
+        }
+        metrics.append(metric_row)
+        if not existing_record:
+            seen_records[metric_key] = record
+        metric_signatures.add(duplicate_signature)
+    return metrics, duplicate_observations_skipped
 
 
 def capture_unconverted_observations(
@@ -644,7 +806,10 @@ def extract_report_data(
         metric_date=metric_date,
         metric_id_tracker=metric_id_tracker,
         source=mappings.get("source", ""),
+        warnings=warnings,
     )
+    duplicate_observations_skipped = health_metrics[1]
+    health_metrics_rows = health_metrics[0]
     unconverted_observations, skipped_lines_count = capture_unconverted_observations(
         page_texts,
         mappings,
@@ -664,15 +829,16 @@ def extract_report_data(
     report = {
         "total_pages_read": len(page_texts),
         "mapped_metrics_found": len(observations),
-        "health_metrics_created": len(health_metrics),
+        "health_metrics_created": len(health_metrics_rows),
         "unconverted_observations_count": unconverted_count,
         "unidentified_count": unidentified_count,
+        "duplicate_observations_skipped": duplicate_observations_skipped,
         "skipped_lines_count": skipped_lines_count,
         "warnings": warnings,
     }
     return {
         "observations": observations,
-        "health_metrics": health_metrics,
+        "health_metrics": health_metrics_rows,
         "unconverted_observations": unconverted_observations,
         "report": report,
     }
