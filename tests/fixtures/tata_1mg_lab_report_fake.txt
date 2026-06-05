@@ -1,0 +1,10 @@
+=== Page 1 ===
+Report Summary
+Thyroid Stimulating Hormone - Ultra Sensitive 6.264 µIU/mL 0.35 - 5.50
+Lipoprotein(a) > 1000.00 mg/dL 0.00 - 30.00
+Reverse T3 22.0 ng/dL 9.2 - 24.1
+Collected on 2026-04-25
+=== Page 2 ===
+Free T4 1.20 ng/dL 0.89 - 1.76
+> 7.0 mg/dL 1.0 - 5.0
+End of Report
