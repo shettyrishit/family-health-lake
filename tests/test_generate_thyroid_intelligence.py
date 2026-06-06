@@ -31,7 +31,6 @@ class FakeBigQueryClient:
         self.existing_rows_by_table = existing_rows_by_table or {}
         self.delete_errors_by_table = delete_errors_by_table or {}
         self.queries = []
-        self.insert_calls = []
 
     def query(self, query, job_config=None):
         self.queries.append({"query": query, "job_config": job_config})
@@ -49,8 +48,7 @@ class FakeBigQueryClient:
         return FakeQueryJob()
 
     def insert_rows_json(self, table_id, rows):
-        self.insert_calls.append({"table_id": table_id, "rows": rows})
-        return []
+        raise AssertionError("Thyroid intelligence should not use streaming inserts.")
 
 
 def fake_metric_query_job_config_factory(person_id, document_id, metric_names):
@@ -65,6 +63,13 @@ def fake_delete_query_job_config_factory(document_id, person_id):
     return {
         "document_id": document_id,
         "person_id": person_id,
+    }
+
+
+def fake_insert_query_job_config_factory(table_name, row):
+    return {
+        "table_name": table_name,
+        "row": dict(row),
     }
 
 
@@ -129,8 +134,20 @@ class ThyroidIntelligenceTests(unittest.TestCase):
 
         self.assertEqual("above_reference", trend["trend_status"])
         self.assertEqual(
+            "trend_p001_doc_p001_lab_2026_04_25_tata_1mg_fake_thyroid_tsh_above_reference",
+            trend["trend_id"],
+        )
+        self.assertEqual(
             "TSH is above reference range on the latest available test.",
             trend["trend_summary"],
+        )
+        self.assertEqual(
+            "alert_p001_doc_p001_lab_2026_04_25_tata_1mg_fake_thyroid_tsh_above_reference",
+            alert["alert_id"],
+        )
+        self.assertEqual(
+            "insight_p001_doc_p001_lab_2026_04_25_tata_1mg_fake_thyroid_status",
+            insight["insight_id"],
         )
         self.assertEqual(["m_p001_2026-04-25_tsh"], trend["related_metric_ids"])
         self.assertEqual(
@@ -215,13 +232,17 @@ class ThyroidIntelligenceTests(unittest.TestCase):
             client=client,
             metric_query_job_config_factory=fake_metric_query_job_config_factory,
             delete_query_job_config_factory=fake_delete_query_job_config_factory,
+            insert_query_job_config_factory=fake_insert_query_job_config_factory,
         )
 
-        self.assertEqual(4, len(client.queries))
+        self.assertEqual(7, len(client.queries))
         self.assertIn("FROM `project-b01843b0-70b0-47d0-af0.health_os.health_metric`", client.queries[0]["query"])
         self.assertIn("DELETE FROM `project-b01843b0-70b0-47d0-af0.health_os.metric_trend`", client.queries[1]["query"])
         self.assertIn("DELETE FROM `project-b01843b0-70b0-47d0-af0.health_os.alert`", client.queries[2]["query"])
         self.assertIn("DELETE FROM `project-b01843b0-70b0-47d0-af0.health_os.insight`", client.queries[3]["query"])
+        self.assertIn("INSERT INTO `project-b01843b0-70b0-47d0-af0.health_os.metric_trend`", client.queries[4]["query"])
+        self.assertIn("INSERT INTO `project-b01843b0-70b0-47d0-af0.health_os.alert`", client.queries[5]["query"])
+        self.assertIn("INSERT INTO `project-b01843b0-70b0-47d0-af0.health_os.insight`", client.queries[6]["query"])
         self.assertEqual(
             {
                 "person_id": "p001",
@@ -245,17 +266,15 @@ class ThyroidIntelligenceTests(unittest.TestCase):
             },
             client.queries[1]["job_config"],
         )
-        self.assertEqual(3, len(client.insert_calls))
-        self.assertEqual("project-b01843b0-70b0-47d0-af0.health_os.metric_trend", client.insert_calls[0]["table_id"])
-        self.assertEqual("project-b01843b0-70b0-47d0-af0.health_os.alert", client.insert_calls[1]["table_id"])
-        self.assertEqual("project-b01843b0-70b0-47d0-af0.health_os.insight", client.insert_calls[2]["table_id"])
+        self.assertEqual("metric_trend", client.queries[4]["job_config"]["table_name"])
+        self.assertEqual("alert", client.queries[5]["job_config"]["table_name"])
+        self.assertEqual("insight", client.queries[6]["job_config"]["table_name"])
         self.assertEqual(3, result["health_metrics_read"])
         self.assertEqual(1, result["metric_trends_created"])
         self.assertEqual(1, result["alerts_created"])
         self.assertEqual(1, result["insights_created"])
-        self.assertEqual(0, result["tables_already_synced"])
 
-    def test_generate_thyroid_intelligence_skips_insert_when_streaming_buffer_rows_match(self):
+    def test_generate_thyroid_intelligence_skips_insert_when_legacy_streamed_rows_match(self):
         metric_rows = [
             {
                 "metric_id": "m_p001_2026-04-25_tsh",
@@ -286,9 +305,7 @@ class ThyroidIntelligenceTests(unittest.TestCase):
             },
         ]
         expected_rows = build_thyroid_intelligence_rows(
-            [
-                HealthMetricRecord(**row) for row in metric_rows
-            ],
+            [HealthMetricRecord(**row) for row in metric_rows],
             person_id="p001",
             document_id="doc_p001_lab_2026_04_25_tata_1mg_fake",
         )
@@ -317,14 +334,14 @@ class ThyroidIntelligenceTests(unittest.TestCase):
             client=client,
             metric_query_job_config_factory=fake_metric_query_job_config_factory,
             delete_query_job_config_factory=fake_delete_query_job_config_factory,
+            insert_query_job_config_factory=fake_insert_query_job_config_factory,
             existing_row_query_job_config_factory=fake_existing_row_query_job_config_factory,
         )
 
         self.assertEqual(7, len(client.queries))
-        self.assertEqual(0, len(client.insert_calls))
         self.assertEqual(3, result["tables_already_synced"])
 
-    def test_generate_thyroid_intelligence_raises_when_streaming_buffer_rows_do_not_match(self):
+    def test_generate_thyroid_intelligence_raises_when_legacy_streamed_rows_do_not_match(self):
         metric_rows = [
             {
                 "metric_id": "m_p001_2026-04-25_tsh",
@@ -373,6 +390,7 @@ class ThyroidIntelligenceTests(unittest.TestCase):
                 client=client,
                 metric_query_job_config_factory=fake_metric_query_job_config_factory,
                 delete_query_job_config_factory=fake_delete_query_job_config_factory,
+                insert_query_job_config_factory=fake_insert_query_job_config_factory,
                 existing_row_query_job_config_factory=fake_existing_row_query_job_config_factory,
             )
 

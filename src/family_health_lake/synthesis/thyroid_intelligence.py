@@ -9,7 +9,6 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from family_health_lake.ingestion.bigquery_csv_loader import (
     create_bigquery_client,
-    insert_rows,
     load_environment_config,
 )
 
@@ -29,54 +28,64 @@ STREAMING_BUFFER_ERROR_SNIPPET = "would affect rows in the streaming buffer"
 TABLE_SYNC_CONFIG = {
     "metric_trend": {
         "id_field": "trend_id",
-        "field_names": [
-            "trend_id",
-            "person_id",
-            "taxonomy",
-            "category",
-            "metric_name",
-            "trend_type",
-            "trend_summary",
-            "trend_status",
-            "start_date",
-            "end_date",
-            "related_metric_ids",
-            "source_document_ids",
+        "field_specs": [
+            ("trend_id", "STRING"),
+            ("person_id", "STRING"),
+            ("taxonomy", "STRING"),
+            ("category", "STRING"),
+            ("metric_name", "STRING"),
+            ("trend_type", "STRING"),
+            ("trend_summary", "STRING"),
+            ("trend_status", "STRING"),
+            ("start_date", "DATE"),
+            ("end_date", "DATE"),
+            ("related_metric_ids", "ARRAY<STRING>"),
+            ("source_document_ids", "ARRAY<STRING>"),
         ],
     },
     "alert": {
         "id_field": "alert_id",
-        "field_names": [
-            "alert_id",
-            "person_id",
-            "taxonomy",
-            "category",
-            "alert_type",
-            "severity",
-            "message",
-            "status",
-            "related_metric_ids",
-            "related_trend_ids",
-            "source_document_ids",
+        "field_specs": [
+            ("alert_id", "STRING"),
+            ("person_id", "STRING"),
+            ("taxonomy", "STRING"),
+            ("category", "STRING"),
+            ("alert_type", "STRING"),
+            ("severity", "STRING"),
+            ("message", "STRING"),
+            ("status", "STRING"),
+            ("related_metric_ids", "ARRAY<STRING>"),
+            ("related_trend_ids", "ARRAY<STRING>"),
+            ("source_document_ids", "ARRAY<STRING>"),
         ],
     },
     "insight": {
         "id_field": "insight_id",
-        "field_names": [
-            "insight_id",
-            "person_id",
-            "taxonomy",
-            "category",
-            "insight_type",
-            "summary",
-            "insight_status",
-            "supporting_metric_ids",
-            "supporting_trend_ids",
-            "supporting_alert_ids",
-            "source_document_ids",
+        "field_specs": [
+            ("insight_id", "STRING"),
+            ("person_id", "STRING"),
+            ("taxonomy", "STRING"),
+            ("category", "STRING"),
+            ("insight_type", "STRING"),
+            ("summary", "STRING"),
+            ("insight_status", "STRING"),
+            ("supporting_metric_ids", "ARRAY<STRING>"),
+            ("supporting_trend_ids", "ARRAY<STRING>"),
+            ("supporting_alert_ids", "ARRAY<STRING>"),
+            ("source_document_ids", "ARRAY<STRING>"),
         ],
     },
 }
+
+
+def _field_specs_for_table(table_name: str) -> List[tuple[str, str]]:
+    return list(TABLE_SYNC_CONFIG[table_name]["field_specs"])
+
+
+def _field_names_for_table(table_name: str) -> List[str]:
+    return [
+        field_name for field_name, _field_type in _field_specs_for_table(table_name)
+    ]
 
 
 @dataclass(frozen=True)
@@ -108,15 +117,13 @@ def normalize_id_component(value: str) -> str:
     return re.sub(r"_+", "_", snake_case)
 
 
-def _make_package_id(prefix: str, person_id: str, document_id: str, name: str) -> str:
-    return "_".join(
-        [
-            prefix,
-            normalize_id_component(person_id),
-            normalize_id_component(document_id),
-            normalize_id_component(name),
-        ]
-    )
+def _make_thyroid_intelligence_id(
+    prefix: str,
+    person_id: str,
+    document_id: str,
+    suffix: str,
+) -> str:
+    return f"{prefix}_{person_id}_{document_id}_{suffix}"
 
 
 def _get_row_value(row: Any, field_name: str) -> Any:
@@ -163,6 +170,32 @@ def _default_delete_job_config_factory(document_id: str, person_id: str) -> Any:
             bigquery.ScalarQueryParameter("person_id", "STRING", person_id),
         ]
     )
+
+
+def _default_insert_job_config_factory(
+    table_name: str,
+    row: Dict[str, Any],
+) -> Any:
+    try:
+        from google.cloud import bigquery  # type: ignore
+    except ImportError as exc:
+        raise RuntimeError(
+            "google-cloud-bigquery is required for thyroid synthesis. Install the bigquery extra before running this CLI."
+        ) from exc
+
+    parameters = []
+    for field_name, field_type in _field_specs_for_table(table_name):
+        value = row.get(field_name)
+        if field_type == "ARRAY<STRING>":
+            parameters.append(
+                bigquery.ArrayQueryParameter(field_name, "STRING", list(value or []))
+            )
+        else:
+            parameters.append(
+                bigquery.ScalarQueryParameter(field_name, field_type, value)
+            )
+
+    return bigquery.QueryJobConfig(query_parameters=parameters)
 
 
 def _default_existing_row_query_job_config_factory(row_ids: Sequence[str]) -> Any:
@@ -257,11 +290,11 @@ def build_thyroid_intelligence_rows(
     insight_rows: List[Dict[str, Any]] = []
 
     if tsh_metric.status == "high":
-        trend_id = _make_package_id(
+        trend_id = _make_thyroid_intelligence_id(
             "trend",
             person_id,
             document_id,
-            "thyroid_tsh_latest_status",
+            "thyroid_tsh_above_reference",
         )
         trend_rows.append(
             {
@@ -285,7 +318,7 @@ def build_thyroid_intelligence_rows(
             for metric_name in ("TSH", "Free T4", "Free T3")
             if (metric := latest_by_name.get(metric_name)) is not None
         ]
-        alert_id = _make_package_id(
+        alert_id = _make_thyroid_intelligence_id(
             "alert",
             person_id,
             document_id,
@@ -320,7 +353,7 @@ def build_thyroid_intelligence_rows(
         ]
         insight_rows.append(
             {
-                "insight_id": _make_package_id(
+                "insight_id": _make_thyroid_intelligence_id(
                     "insight",
                     person_id,
                     document_id,
@@ -394,19 +427,17 @@ def fetch_existing_rows_by_ids(
     if not row_ids:
         return []
 
-    table_config = TABLE_SYNC_CONFIG[table_name]
-    field_names = table_config["field_names"]
-    id_field = table_config["id_field"]
+    field_names = _field_names_for_table(table_name)
+    id_field = TABLE_SYNC_CONFIG[table_name]["id_field"]
     query = (
         f"SELECT {', '.join(field_names)} "
         f"FROM `{project_id}.{dataset}.{table_name}` "
         f"WHERE {id_field} IN UNNEST(@row_ids)"
     )
-    config_factory = query_job_config_factory or _default_existing_row_query_job_config_factory
-    query_job = client.query(
-        query,
-        job_config=config_factory(row_ids),
+    config_factory = (
+        query_job_config_factory or _default_existing_row_query_job_config_factory
     )
+    query_job = client.query(query, job_config=config_factory(row_ids))
     rows = query_job.result()
     return [
         {
@@ -429,9 +460,8 @@ def table_already_has_expected_rows(
     if not rows:
         return False
 
-    table_config = TABLE_SYNC_CONFIG[table_name]
-    field_names = table_config["field_names"]
-    id_field = table_config["id_field"]
+    field_names = _field_names_for_table(table_name)
+    id_field = TABLE_SYNC_CONFIG[table_name]["id_field"]
     row_ids = [str(row[id_field]) for row in rows]
     existing_rows = fetch_existing_rows_by_ids(
         client,
@@ -450,61 +480,35 @@ def table_already_has_expected_rows(
             field_name: _normalize_comparison_value(row.get(field_name))
             for field_name in field_names
         }
-        existing_row = existing_by_id.get(str(row[id_field]))
-        if existing_row != expected_row:
+        if existing_by_id.get(str(row[id_field])) != expected_row:
             return False
     return True
 
 
-def sync_thyroid_table(
+def insert_thyroid_rows_for_table(
     client: Any,
     *,
     project_id: str,
     dataset: str,
     table_name: str,
     rows: Sequence[Dict[str, Any]],
-    document_id: str,
-    person_id: str,
-    replace_existing: bool,
-    delete_query_job_config_factory: Optional[Callable[[str, str], Any]] = None,
-    existing_row_query_job_config_factory: Optional[Callable[[Sequence[str]], Any]] = None,
-) -> bool:
-    if replace_existing:
-        try:
-            delete_existing_thyroid_rows_for_table(
-                client,
-                project_id=project_id,
-                dataset=dataset,
-                table_name=table_name,
-                document_id=document_id,
-                person_id=person_id,
-                query_job_config_factory=delete_query_job_config_factory,
-            )
-        except Exception as exc:
-            if not _is_streaming_buffer_mutation_error(exc):
-                raise
-            if table_already_has_expected_rows(
-                client,
-                project_id=project_id,
-                dataset=dataset,
-                table_name=table_name,
-                rows=rows,
-                existing_row_query_job_config_factory=existing_row_query_job_config_factory,
-            ):
-                return True
-            raise RuntimeError(
-                f"Cannot replace existing thyroid {table_name} rows yet because BigQuery is still buffering recent streamed rows for this document. "
-                "Wait a few minutes and retry `--replace-existing`."
-            ) from exc
+    query_job_config_factory: Optional[Callable[[str, Dict[str, Any]], Any]] = None,
+) -> None:
+    if not rows:
+        return
 
-    insert_rows(
-        client,
-        project_id=project_id,
-        dataset=dataset,
-        table_name=table_name,
-        rows=rows,
+    field_names = _field_names_for_table(table_name)
+    query = (
+        f"INSERT INTO `{project_id}.{dataset}.{table_name}` "
+        f"({', '.join(field_names)}) "
+        f"VALUES ({', '.join(f'@{field_name}' for field_name in field_names)})"
     )
-    return False
+    config_factory = query_job_config_factory or _default_insert_job_config_factory
+    for row in rows:
+        client.query(
+            query,
+            job_config=config_factory(table_name, row),
+        ).result()
 
 
 def generate_thyroid_intelligence(
@@ -518,7 +522,12 @@ def generate_thyroid_intelligence(
         Callable[[str, str, Sequence[str]], Any]
     ] = None,
     delete_query_job_config_factory: Optional[Callable[[str, str], Any]] = None,
-    existing_row_query_job_config_factory: Optional[Callable[[Sequence[str]], Any]] = None,
+    insert_query_job_config_factory: Optional[
+        Callable[[str, Dict[str, Any]], Any]
+    ] = None,
+    existing_row_query_job_config_factory: Optional[
+        Callable[[Sequence[str]], Any]
+    ] = None,
 ) -> Dict[str, Any]:
     environment_config = load_environment_config(environment_config_path)
     project_id = environment_config["gcp"]["project_id"]
@@ -539,25 +548,55 @@ def generate_thyroid_intelligence(
         document_id=document_id,
     )
 
-    already_synced_tables = 0
+    tables_already_synced = 0
+    skipped_inserts: set[str] = set()
+
+    if replace_existing:
+        for table_name in ("metric_trend", "alert", "insight"):
+            table_rows = rows[f"{table_name}_rows"]
+            try:
+                delete_existing_thyroid_rows_for_table(
+                    bigquery_client,
+                    project_id=project_id,
+                    dataset=dataset,
+                    table_name=table_name,
+                    document_id=document_id,
+                    person_id=person_id,
+                    query_job_config_factory=delete_query_job_config_factory,
+                )
+            except Exception as exc:
+                if not _is_streaming_buffer_mutation_error(exc):
+                    raise
+                if table_already_has_expected_rows(
+                    bigquery_client,
+                    project_id=project_id,
+                    dataset=dataset,
+                    table_name=table_name,
+                    rows=table_rows,
+                    existing_row_query_job_config_factory=existing_row_query_job_config_factory,
+                ):
+                    skipped_inserts.add(table_name)
+                    tables_already_synced += 1
+                    continue
+                raise RuntimeError(
+                    f"Cannot replace existing thyroid {table_name} rows yet because BigQuery is still buffering recent streamed rows for this document. "
+                    "Wait a few minutes and retry `--replace-existing`."
+                ) from exc
+
     for table_name, table_rows in (
         ("metric_trend", rows["metric_trend_rows"]),
         ("alert", rows["alert_rows"]),
         ("insight", rows["insight_rows"]),
     ):
-        already_synced_tables += int(
-            sync_thyroid_table(
-                bigquery_client,
-                project_id=project_id,
-                dataset=dataset,
-                table_name=table_name,
-                rows=table_rows,
-                document_id=document_id,
-                person_id=person_id,
-                replace_existing=replace_existing,
-                delete_query_job_config_factory=delete_query_job_config_factory,
-                existing_row_query_job_config_factory=existing_row_query_job_config_factory,
-            )
+        if table_name in skipped_inserts:
+            continue
+        insert_thyroid_rows_for_table(
+            bigquery_client,
+            project_id=project_id,
+            dataset=dataset,
+            table_name=table_name,
+            rows=table_rows,
+            query_job_config_factory=insert_query_job_config_factory,
         )
 
     return {
@@ -568,7 +607,7 @@ def generate_thyroid_intelligence(
         "metric_trends_created": len(rows["metric_trend_rows"]),
         "alerts_created": len(rows["alert_rows"]),
         "insights_created": len(rows["insight_rows"]),
-        "tables_already_synced": already_synced_tables,
+        "tables_already_synced": tables_already_synced,
     }
 
 

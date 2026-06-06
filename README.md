@@ -118,7 +118,8 @@ The thyroid synthesis CLI:
 - uses ADC through the `google-cloud-bigquery` client
 - reads `project_id` and `dataset` from `config/environments/dev.yaml`
 - reads thyroid metrics from `health_metric`
-- writes thyroid intelligence rows to `metric_trend`, `alert`, and `insight`
+- writes thyroid intelligence rows to `metric_trend`, `alert`, and `insight` using BigQuery query jobs
+- does not use BigQuery streaming inserts for derived intelligence writes
 - does not generate coach recommendations
 
 Run it with:
@@ -131,4 +132,4 @@ python3 scripts/synthesis/generate_thyroid_intelligence.py \
   --replace-existing
 ```
 
-When `--replace-existing` is provided, the CLI deletes existing thyroid `metric_trend`, `alert`, and `insight` rows for the same `person_id` whose `source_document_ids` contain the target `document_id`, then inserts the newly generated rows.
+When `--replace-existing` is provided, the CLI runs `DELETE` query jobs for existing thyroid `metric_trend`, `alert`, and `insight` rows for the same `person_id` whose `source_document_ids` contain the target `document_id`, then runs `INSERT` query jobs for the newly generated rows.
