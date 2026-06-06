@@ -49,7 +49,9 @@ Source Data
 → Dashboard
 ```
 
-The **Personal Coach** is separate and holistic. It is not produced by a single taxonomy slice.
+The **Personal Coach** is separate and holistic. It is not produced by a single taxonomy slice. It is a future layer that consumes inputs from all other layers to provide person-specific recommendations.
+
+Currently, the system completes the flow up to the **Insight Layer**, which produces taxonomy-level synthesis. The **Dashboard** displays these insights and related metrics, trends, and alerts.
 
 ---
 
@@ -216,10 +218,9 @@ Insights are not medical decisions. They are structured prompts for review and a
 
 ### 7. Dashboard Layer
 
-The dashboard displays metrics, trends, alerts, and insights in context.
-Future scope: Coach recommendations shown next to the relevant metrics, insights, or trace paths
+The dashboard displays metrics, trends, alerts, and insights in context. It provides a view into the current state of a person's health across different taxonomies.
 
-Dashboard cards should generally show:
+Dashboard cards currently show:
 
 ```text
 Taxonomy
@@ -230,6 +231,8 @@ Taxonomy
 → Source evidence
 → Trace
 ```
+
+Future scope: Coach recommendations may be shown next to the relevant metrics, insights, or trace paths.
 
 For example:
 
@@ -257,9 +260,9 @@ The dashboard must support navigable trace.
 
 The personal coach is intentionally decoupled from individual taxonomy slices.
 
-A taxonomy slice should produce traceable insight packages. It should not directly produce coach recommendations.
+A taxonomy slice should produce traceable insight packages (metric_trend → alert → insight). It should not directly produce coach recommendations.
 
-The coach is a separate holistic layer that will later consume:
+The coach is a separate holistic layer that is currently out of scope for implementation but is designed to later consume:
 
 * Person profile
 * Goals
@@ -598,7 +601,14 @@ Thyroid metrics
 
 This slice should not generate coach recommendations.
 
-The output should be a traceable thyroid insight package that can later become one input to the holistic coach.
+The output should be a traceable thyroid insight package (metrics, trends, alerts, insights) that can later become one input to the holistic coach.
+
+Current dashboard implementation for thyroid shows:
+- Key metrics (TSH, Free T4, etc.)
+- Trends (e.g., "TSH remains above reference range")
+- Alerts (e.g., "TSH is high")
+- Insights (e.g., "Thyroid is monitored but not fully optimized")
+- Trace (links back to raw data)
 
 ---
 

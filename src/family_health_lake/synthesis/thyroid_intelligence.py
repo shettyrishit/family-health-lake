@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
+from family_health_lake.utils import get_row_value, normalize_id_component
+
 from family_health_lake.ingestion.bigquery_csv_loader import (
     create_bigquery_client,
     load_environment_config,
@@ -110,13 +112,6 @@ def build_cli_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def normalize_id_component(value: str) -> str:
-    normalized = unicodedata.normalize("NFKD", value)
-    ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
-    snake_case = re.sub(r"[^a-zA-Z0-9]+", "_", ascii_value.lower()).strip("_")
-    return re.sub(r"_+", "_", snake_case)
-
-
 def _make_thyroid_intelligence_id(
     prefix: str,
     person_id: str,
@@ -124,15 +119,6 @@ def _make_thyroid_intelligence_id(
     suffix: str,
 ) -> str:
     return f"{prefix}_{person_id}_{document_id}_{suffix}"
-
-
-def _get_row_value(row: Any, field_name: str) -> Any:
-    if isinstance(row, dict):
-        return row.get(field_name)
-    try:
-        return row[field_name]
-    except (KeyError, TypeError, IndexError):
-        return getattr(row, field_name)
 
 
 def _default_metric_query_job_config_factory(
@@ -240,13 +226,13 @@ def fetch_thyroid_metrics(
     rows = query_job.result()
     return [
         HealthMetricRecord(
-            metric_id=str(_get_row_value(row, "metric_id")),
-            person_id=str(_get_row_value(row, "person_id")),
-            document_id=str(_get_row_value(row, "document_id")),
-            metric_date=str(_get_row_value(row, "metric_date")),
-            category=str(_get_row_value(row, "category") or THYROID_CATEGORY),
-            metric_name=str(_get_row_value(row, "metric_name")),
-            status=str(_get_row_value(row, "status") or ""),
+            metric_id=str(get_row_value(row, "metric_id")),
+            person_id=str(get_row_value(row, "person_id")),
+            document_id=str(get_row_value(row, "document_id")),
+            metric_date=str(get_row_value(row, "metric_date")),
+            category=str(get_row_value(row, "category") or THYROID_CATEGORY),
+            metric_name=str(get_row_value(row, "metric_name")),
+            status=str(get_row_value(row, "status") or ""),
         )
         for row in rows
     ]
@@ -441,7 +427,7 @@ def fetch_existing_rows_by_ids(
     rows = query_job.result()
     return [
         {
-            field_name: _normalize_comparison_value(_get_row_value(row, field_name))
+            field_name: _normalize_comparison_value(get_row_value(row, field_name))
             for field_name in field_names
         }
         for row in rows

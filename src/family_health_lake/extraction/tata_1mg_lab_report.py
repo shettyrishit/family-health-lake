@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from family_health_lake.utils import load_yaml_config, normalize_id_component
+
 
 OBSERVATION_FIELDS = [
     "observation_id",
@@ -147,19 +149,6 @@ class UnmappedLabResultCandidate:
     failure_reason: str
 
 
-def normalize_id_component(value: str) -> str:
-    normalized = unicodedata.normalize("NFKD", value)
-    ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
-    snake_case = re.sub(r"[^a-zA-Z0-9]+", "_", ascii_value.lower()).strip("_")
-    return re.sub(r"_+", "_", snake_case)
-
-
-def _normalize_label_for_matching(value: str) -> str:
-    normalized = unicodedata.normalize("NFKD", value)
-    ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
-    return re.sub(r"[^a-zA-Z0-9]+", "", ascii_value.casefold())
-
-
 def parse_numeric_value(raw_value: str) -> ParsedValue:
     cleaned = " ".join(raw_value.strip().split())
     match = re.fullmatch(
@@ -186,55 +175,14 @@ def parse_numeric_value(raw_value: str) -> ParsedValue:
     )
 
 
-def _strip_yaml_string(value: str) -> str:
-    value = value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        return value[1:-1]
-    return value
-
-
-def _load_metric_mappings_without_yaml(mapping_path: Path) -> Dict[str, Any]:
-    source = ""
-    taxonomy = ""
-    metrics: Dict[str, Dict[str, str]] = {}
-    current_metric: Optional[str] = None
-
-    for raw_line in mapping_path.read_text(encoding="utf-8").splitlines():
-        if not raw_line.strip() or raw_line.lstrip().startswith("#"):
-            continue
-
-        indent = len(raw_line) - len(raw_line.lstrip(" "))
-        stripped = raw_line.strip()
-
-        if indent == 0:
-            if stripped == "metrics:":
-                continue
-            key, value = stripped.split(":", 1)
-            if key == "source":
-                source = _strip_yaml_string(value)
-            elif key == "taxonomy":
-                taxonomy = _strip_yaml_string(value)
-        elif indent == 2 and stripped.endswith(":"):
-            current_metric = _strip_yaml_string(stripped[:-1])
-            metrics[current_metric] = {}
-        elif indent == 4 and current_metric:
-            key, value = stripped.split(":", 1)
-            metrics[current_metric][key.strip()] = _strip_yaml_string(value)
-
-    return {"source": source, "taxonomy": taxonomy, "metrics": metrics}
+def _normalize_label_for_matching(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-zA-Z0-9]+", "", ascii_value.casefold())
 
 
 def load_metric_mappings(mapping_path: str | Path) -> Dict[str, Any]:
-    path = Path(mapping_path)
-    try:
-        import yaml  # type: ignore
-    except ImportError:
-        return _load_metric_mappings_without_yaml(path)
-
-    with path.open("r", encoding="utf-8") as handle:
-        loaded = yaml.safe_load(handle)
-
-    return loaded or {"source": "", "taxonomy": "", "metrics": {}}
+    return load_yaml_config(mapping_path)
 
 
 def extract_pdf_text_by_page(pdf_path: str | Path) -> List[Dict[str, Any]]:

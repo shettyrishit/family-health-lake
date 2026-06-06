@@ -4,7 +4,7 @@ import argparse
 import csv
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from family_health_lake.utils import load_yaml_config
 
 
 OBSERVATION_FIELDS = [
@@ -73,56 +73,14 @@ def build_cli_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _strip_yaml_string(value: str) -> str:
-    value = value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        return value[1:-1]
-    return value
-
-
-def _load_simple_yaml(path: Path) -> Dict[str, Any]:
-    root: Dict[str, Any] = {}
-    stack: List[tuple[int, Dict[str, Any]]] = [(-1, root)]
-
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        if not raw_line.strip() or raw_line.lstrip().startswith("#"):
-            continue
-        indent = len(raw_line) - len(raw_line.lstrip(" "))
-        stripped = raw_line.strip()
-        key, value = stripped.split(":", 1)
-        key = key.strip()
-        value = value.strip()
-
-        while stack and indent <= stack[-1][0]:
-            stack.pop()
-        current = stack[-1][1]
-
-        if value == "":
-            child: Dict[str, Any] = {}
-            current[key] = child
-            stack.append((indent, child))
-        else:
-            current[key] = _strip_yaml_string(value)
-
-    return root
-
-
 def load_environment_config(path: str | Path) -> Dict[str, Any]:
-    config_path = Path(path)
-    try:
-        import yaml  # type: ignore
-    except ImportError:
-        config = _load_simple_yaml(config_path)
-    else:
-        with config_path.open("r", encoding="utf-8") as handle:
-            config = yaml.safe_load(handle) or {}
-
+    config = load_yaml_config(path)
     gcp = config.get("gcp") or {}
     bigquery = config.get("bigquery") or {}
     if not gcp.get("project_id"):
-        raise ValueError(f"Missing gcp.project_id in environment config: {config_path}")
+        raise ValueError(f"Missing gcp.project_id in environment config: {path}")
     if not bigquery.get("dataset"):
-        raise ValueError(f"Missing bigquery.dataset in environment config: {config_path}")
+        raise ValueError(f"Missing bigquery.dataset in environment config: {path}")
     return config
 
 

@@ -4,6 +4,8 @@ import argparse
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
+from family_health_lake.utils import get_row_value
+
 from family_health_lake.ingestion.bigquery_csv_loader import (
     create_bigquery_client,
     load_environment_config,
@@ -48,15 +50,6 @@ def build_cli_parser() -> argparse.ArgumentParser:
     parser.add_argument("--person-id", required=True)
     parser.add_argument("--output-md", required=True)
     return parser
-
-
-def _get_row_value(row: Any, field_name: str) -> Any:
-    if isinstance(row, dict):
-        return row.get(field_name)
-    try:
-        return row[field_name]
-    except (KeyError, TypeError, IndexError):
-        return getattr(row, field_name)
 
 
 def _default_query_job_config_factory(person_id: str) -> Any:

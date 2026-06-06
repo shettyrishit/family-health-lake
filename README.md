@@ -12,7 +12,7 @@ Complete all layers for `person_id` `p001` first.
 
 ## First Vertical Slice
 
-Tata 1mg lab report PDF -> source document -> observations -> health metrics -> trends -> alerts -> insights -> coach recommendation -> dashboard trace
+Tata 1mg lab report PDF -> source document -> observations -> health metrics -> trends -> alerts -> insights -> dashboard trace
 
 ## GCP Resources
 
