@@ -195,7 +195,10 @@ def create_bigquery_client(project_id: str):
         from google.cloud import bigquery  # type: ignore
     except ImportError as exc:
         raise RuntimeError(
-            "google-cloud-bigquery is required for BigQuery loading. Install the bigquery extra before running this CLI."
+            "google-cloud-bigquery is required for BigQuery operations. "
+            "Install the local project extras with "
+            "`python3 -m pip install -e \".[bigquery]\"` "
+            "or use a virtual environment and install the same extra there."
         ) from exc
 
     try:
@@ -213,7 +216,10 @@ def _default_query_job_config_factory(document_id: str, person_id: str):
         from google.cloud import bigquery  # type: ignore
     except ImportError as exc:
         raise RuntimeError(
-            "google-cloud-bigquery is required for BigQuery loading. Install the bigquery extra before running this CLI."
+            "google-cloud-bigquery is required for BigQuery operations. "
+            "Install the local project extras with "
+            "`python3 -m pip install -e \".[bigquery]\"` "
+            "or use a virtual environment and install the same extra there."
         ) from exc
 
     return bigquery.QueryJobConfig(
@@ -347,14 +353,17 @@ def load_extracted_csvs_to_bigquery(
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_cli_parser()
     args = parser.parse_args(argv)
-    load_extracted_csvs_to_bigquery(
-        environment_config_path=args.environment_config,
-        observations_csv_path=args.observations_csv,
-        health_metrics_csv_path=args.health_metrics_csv,
-        document_id=args.document_id,
-        person_id=args.person_id,
-        replace_existing=args.replace_existing,
-    )
+    try:
+        load_extracted_csvs_to_bigquery(
+            environment_config_path=args.environment_config,
+            observations_csv_path=args.observations_csv,
+            health_metrics_csv_path=args.health_metrics_csv,
+            document_id=args.document_id,
+            person_id=args.person_id,
+            replace_existing=args.replace_existing,
+        )
+    except RuntimeError as exc:
+        parser.exit(status=2, message=f"error: {exc}\n")
     return 0
 
 

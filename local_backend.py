@@ -17,6 +17,18 @@ PYTHON_REQUIRES = ">=3.9"
 WHEEL_TAG = "py3-none-any"
 DIST_NAME = NAME.replace("-", "_")
 DIST_INFO_DIR = f"{DIST_NAME}-{VERSION}.dist-info"
+OPTIONAL_DEPENDENCIES = {
+    "bigquery": [
+        "google-cloud-bigquery>=3,<4",
+        "PyYAML>=6,<7",
+    ],
+    "pdf": [
+        "PyMuPDF>=1.24,<2",
+    ],
+    "test": [
+        "pytest>=8,<9",
+    ],
+}
 
 
 def _supported_features() -> List[str]:
@@ -32,16 +44,19 @@ def get_requires_for_build_editable(config_settings=None) -> List[str]:
 
 
 def _metadata_contents() -> str:
-    return "\n".join(
-        [
-            "Metadata-Version: 2.1",
-            f"Name: {NAME}",
-            f"Version: {VERSION}",
-            f"Summary: {SUMMARY}",
-            f"Requires-Python: {PYTHON_REQUIRES}",
-            "",
-        ]
-    )
+    lines = [
+        "Metadata-Version: 2.1",
+        f"Name: {NAME}",
+        f"Version: {VERSION}",
+        f"Summary: {SUMMARY}",
+        f"Requires-Python: {PYTHON_REQUIRES}",
+    ]
+    for extra_name, requirements in OPTIONAL_DEPENDENCIES.items():
+        lines.append(f"Provides-Extra: {extra_name}")
+        for requirement in requirements:
+            lines.append(f"Requires-Dist: {requirement}; extra == '{extra_name}'")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _wheel_contents() -> str:

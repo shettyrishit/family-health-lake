@@ -63,6 +63,13 @@ Install the optional BigQuery dependencies when you want to load extractor outpu
 python -m pip install -e ".[bigquery]"
 ```
 
+If your system Python is externally managed and refuses direct installs, create a local virtual environment first:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[bigquery]"
+```
+
 Authenticate locally with Google Application Default Credentials before running the loader:
 
 ```bash
@@ -89,3 +96,39 @@ python3 scripts/ingestion/load_extracted_csvs_to_bigquery.py \
 ```
 
 When `--replace-existing` is provided, the loader deletes existing `observation` and `health_metric` rows for the given `document_id` and `person_id` before inserting the new CSV contents.
+
+## Local Thyroid Intelligence
+
+Use the thyroid synthesis CLI to read thyroid `health_metric` rows from BigQuery and write traceable `metric_trend`, `alert`, and `insight` rows for the same `person_id` and `document_id`.
+
+Install the optional BigQuery dependencies if needed:
+
+```bash
+python -m pip install -e ".[bigquery]"
+```
+
+If your system Python is externally managed and refuses direct installs, use a local virtual environment:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[bigquery]"
+```
+
+The thyroid synthesis CLI:
+- uses ADC through the `google-cloud-bigquery` client
+- reads `project_id` and `dataset` from `config/environments/dev.yaml`
+- reads thyroid metrics from `health_metric`
+- writes thyroid intelligence rows to `metric_trend`, `alert`, and `insight`
+- does not generate coach recommendations
+
+Run it with:
+
+```bash
+python3 scripts/synthesis/generate_thyroid_intelligence.py \
+  --environment-config config/environments/dev.yaml \
+  --person-id p001 \
+  --document-id doc_p001_lab_2026_04_25_tata_1mg_fitness_premium \
+  --replace-existing
+```
+
+When `--replace-existing` is provided, the CLI deletes existing thyroid `metric_trend`, `alert`, and `insight` rows for the same `person_id` whose `source_document_ids` contain the target `document_id`, then inserts the newly generated rows.
