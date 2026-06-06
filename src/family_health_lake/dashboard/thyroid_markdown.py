@@ -85,7 +85,7 @@ def fetch_thyroid_dashboard_rows(
     query_job = client.query(query, job_config=config_factory(person_id))
     return [
         {
-            field_name: _get_row_value(row, field_name)
+            field_name: get_row_value(row, field_name)
             for field_name in THYROID_DASHBOARD_FIELD_NAMES
         }
         for row in query_job.result()
