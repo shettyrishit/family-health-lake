@@ -166,3 +166,40 @@ python3 scripts/dashboard/render_thyroid_dashboard_markdown.py \
   --person-id p001 \
   --output-md outputs/thyroid_dashboard_p001.md
 ```
+
+## Admin: Scrub Person Data
+
+Use the admin script to scrub BigQuery data for a specific `person_id`. This is useful for rerunning extraction flows or completely removing a person from the dataset.
+
+**Note: This script only scrubs BigQuery rows and does not delete raw files from Google Cloud Storage.**
+
+There are two modes:
+1. `generated` (default): Deletes only derived/generated data (`insight`, `alert`, `metric_trend`, `health_metric`, `observation`). Preserves `source_document` and `person` metadata.
+2. `full-person`: Deletes everything for the person, including metadata (`source_document` and `person`).
+
+Example dry run (generated mode):
+```bash
+python3 scripts/admin/scrub_person_bigquery_data.py \
+  --environment-config config/environments/dev.yaml \
+  --person-id p001
+```
+
+Example execute (generated mode):
+```bash
+python3 scripts/admin/scrub_person_bigquery_data.py \
+  --environment-config config/environments/dev.yaml \
+  --person-id p001 \
+  --mode generated \
+  --confirm-person-id p001 \
+  --execute
+```
+
+Example execute (full-person mode):
+```bash
+python3 scripts/admin/scrub_person_bigquery_data.py \
+  --environment-config config/environments/dev.yaml \
+  --person-id p001 \
+  --mode full-person \
+  --confirm-person-id p001 \
+  --execute
+```

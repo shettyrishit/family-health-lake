@@ -31,6 +31,8 @@ Status: Completed
 
 ## Milestone 3: BigQuery Schema Upgrade
 
+Status: Mostly Completed [recommendation is for later]
+
 Add schema files for:
 
 - person
@@ -44,11 +46,12 @@ Add schema files for:
 
 Also update the live BigQuery dataset to support `observation_id` trace from `health_metric`.
 
-## Milestone 4: Tata 1mg Lab PDF Ingestion
+## Milestone 4: TaTata 1mg PDF
 
-Build local extractor:
+Status: Completed
 
-```text
-Tata 1mg PDF
-→ observations.csv
-→ health_metric.csv
+→ extraction
+→ observations + health metrics
+→ BigQuery load
+→ thyroid intelligence
+→ markdown thyroid dashboard
