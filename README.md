@@ -133,3 +133,36 @@ python3 scripts/synthesis/generate_thyroid_intelligence.py \
 ```
 
 When `--replace-existing` is provided, the CLI runs `DELETE` query jobs for existing thyroid `metric_trend`, `alert`, and `insight` rows for the same `person_id` whose `source_document_ids` contain the target `document_id`, then runs `INSERT` query jobs for the newly generated rows.
+
+## Local Thyroid Dashboard Markdown
+
+Use the dashboard renderer CLI to read the thyroid dashboard view from BigQuery and write a human-readable Markdown card under `outputs/`.
+
+Install the optional BigQuery dependencies if needed:
+
+```bash
+python -m pip install -e ".[bigquery]"
+```
+
+If your system Python is externally managed and refuses direct installs, use a local virtual environment:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[bigquery]"
+```
+
+The thyroid dashboard renderer:
+- uses ADC through the `google-cloud-bigquery` client
+- reads `project_id` and `dataset` from `config/environments/dev.yaml`
+- reads from `v_thyroid_dashboard`
+- renders a simple Markdown card with insight, alert, trend, metrics, and trace
+- does not generate coach recommendations
+
+Run it with:
+
+```bash
+python3 scripts/dashboard/render_thyroid_dashboard_markdown.py \
+  --environment-config config/environments/dev.yaml \
+  --person-id p001 \
+  --output-md outputs/thyroid_dashboard_p001.md
+```
