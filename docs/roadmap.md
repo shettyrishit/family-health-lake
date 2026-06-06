@@ -8,7 +8,7 @@ The system should be built as vertical slices, not by integrating every source f
 
 ## Milestone 1: Repo and Cloud Foundation
 
-Status: In progress / mostly complete
+Status: Completed
 
 - Private GitHub repo created
 - GCP project created
@@ -19,7 +19,7 @@ Status: In progress / mostly complete
 
 ## Milestone 2: Product and Data Model Foundation
 
-Status: In progress
+Status: Completed
 
 - Document product concept
 - Document architecture
