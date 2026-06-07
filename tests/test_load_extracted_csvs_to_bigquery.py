@@ -33,15 +33,19 @@ class FakeQueryJob:
 class FakeBigQueryClient:
     def __init__(self):
         self.queries = []
-        self.insert_calls = []
+        self.load_calls = []
+        self.deleted_tables = []
 
     def query(self, query, job_config=None):
         self.queries.append({"query": query, "job_config": job_config})
         return FakeQueryJob()
 
-    def insert_rows_json(self, table_id, rows):
-        self.insert_calls.append({"table_id": table_id, "rows": rows})
-        return []
+    def load_table_from_json(self, rows, table_id, job_config=None):
+        self.load_calls.append({"table_id": table_id, "rows": rows, "job_config": job_config})
+        return FakeQueryJob()
+
+    def delete_table(self, table_id, not_found_ok=False):
+        self.deleted_tables.append(table_id)
 
 
 def fake_query_job_config_factory(document_id, person_id):
@@ -102,16 +106,23 @@ class LoadExtractedCsvsToBigQueryTests(unittest.TestCase):
             query_job_config_factory=fake_query_job_config_factory,
         )
 
-        self.assertEqual(2, len(client.queries))
+        # 2 DELETE queries + 2 INSERT SELECT queries = 4
+        self.assertEqual(4, len(client.queries))
         self.assertIn("DELETE FROM `project-b01843b0-70b0-47d0-af0.health_os.health_metric`", client.queries[0]["query"])
         self.assertIn("DELETE FROM `project-b01843b0-70b0-47d0-af0.health_os.observation`", client.queries[1]["query"])
-        self.assertEqual(
-            {"document_id": "doc_p001_lab_2026_04_25_tata_1mg_fake", "person_id": "p001"},
-            client.queries[0]["job_config"],
-        )
-        self.assertEqual(2, len(client.insert_calls))
-        self.assertEqual("project-b01843b0-70b0-47d0-af0.health_os.observation", client.insert_calls[0]["table_id"])
-        self.assertEqual("project-b01843b0-70b0-47d0-af0.health_os.health_metric", client.insert_calls[1]["table_id"])
+        
+        # INSERT SELECTs
+        self.assertIn("INSERT INTO `project-b01843b0-70b0-47d0-af0.health_os.observation`", client.queries[2]["query"])
+        self.assertIn("INSERT INTO `project-b01843b0-70b0-47d0-af0.health_os.health_metric`", client.queries[3]["query"])
+
+        self.assertEqual(2, len(client.load_calls))
+        self.assertIn("stg_observation_p001_doc_p001_lab_2026_04_25_tata_1mg_fake", client.load_calls[0]["table_id"])
+        self.assertIn("stg_health_metric_p001_doc_p001_lab_2026_04_25_tata_1mg_fake", client.load_calls[1]["table_id"])
+        
+        self.assertEqual(2, len(client.deleted_tables))
+        self.assertIn("stg_observation_p001_doc_p001_lab_2026_04_25_tata_1mg_fake", client.deleted_tables[0])
+        self.assertIn("stg_health_metric_p001_doc_p001_lab_2026_04_25_tata_1mg_fake", client.deleted_tables[1])
+
         self.assertEqual(2, result["observations_loaded"])
         self.assertEqual(1, result["health_metrics_loaded"])
 

@@ -1,6 +1,6 @@
--- Creates the first thyroid dashboard view with navigable trace.
+-- Creates the thyroid dashboard card and trace views with navigable trace.
 
-CREATE OR REPLACE VIEW `project-b01843b0-70b0-47d0-af0.health_os.v_thyroid_dashboard` AS
+CREATE OR REPLACE VIEW `project-b01843b0-70b0-47d0-af0.health_os.v_thyroid_dashboard_card` AS
 WITH thyroid_insights AS (
   SELECT
     insight_id,
@@ -20,7 +20,6 @@ thyroid_alerts AS (
     message AS alert_message,
     severity AS alert_severity,
     related_trend_ids,
-    related_metric_ids,
     source_document_ids
   FROM `project-b01843b0-70b0-47d0-af0.health_os.alert`
   WHERE category = 'thyroid'
@@ -31,6 +30,65 @@ thyroid_trends AS (
     person_id,
     trend_summary,
     trend_status,
+    source_document_ids
+  FROM `project-b01843b0-70b0-47d0-af0.health_os.metric_trend`
+  WHERE category = 'thyroid'
+)
+SELECT
+  i.person_id,
+  i.insight_id,
+  i.insight_summary,
+  i.insight_status,
+  a.alert_id,
+  a.alert_type,
+  a.alert_message,
+  a.alert_severity,
+  t.trend_id,
+  t.trend_summary,
+  t.trend_status,
+  COALESCE(insight_document_id, alert_document_id, trend_document_id) AS document_id,
+  sd.file_uri
+FROM thyroid_insights AS i
+LEFT JOIN UNNEST(IFNULL(i.supporting_alert_ids, [])) AS supporting_alert_id
+LEFT JOIN UNNEST(IFNULL(i.source_document_ids, [])) AS insight_document_id
+LEFT JOIN thyroid_alerts AS a
+  ON a.alert_id = supporting_alert_id
+  AND a.person_id = i.person_id
+LEFT JOIN UNNEST(IFNULL(a.related_trend_ids, [])) AS related_trend_id
+LEFT JOIN UNNEST(IFNULL(a.source_document_ids, [])) AS alert_document_id
+LEFT JOIN thyroid_trends AS t
+  ON t.trend_id = related_trend_id
+  AND t.person_id = i.person_id
+LEFT JOIN UNNEST(IFNULL(t.source_document_ids, [])) AS trend_document_id
+LEFT JOIN `project-b01843b0-70b0-47d0-af0.health_os.source_document` AS sd
+  ON sd.document_id = COALESCE(insight_document_id, alert_document_id, trend_document_id)
+  AND sd.person_id = i.person_id;
+
+
+CREATE OR REPLACE VIEW `project-b01843b0-70b0-47d0-af0.health_os.v_thyroid_dashboard_trace` AS
+WITH thyroid_insights AS (
+  SELECT
+    insight_id,
+    person_id,
+    supporting_alert_ids,
+    source_document_ids
+  FROM `project-b01843b0-70b0-47d0-af0.health_os.insight`
+  WHERE category = 'thyroid'
+),
+thyroid_alerts AS (
+  SELECT
+    alert_id,
+    person_id,
+    related_trend_ids,
+    related_metric_ids,
+    source_document_ids
+  FROM `project-b01843b0-70b0-47d0-af0.health_os.alert`
+  WHERE category = 'thyroid'
+),
+thyroid_trends AS (
+  SELECT
+    trend_id,
+    person_id,
     source_document_ids
   FROM `project-b01843b0-70b0-47d0-af0.health_os.metric_trend`
   WHERE category = 'thyroid'
@@ -54,15 +112,8 @@ thyroid_metrics AS (
 SELECT
   i.person_id,
   i.insight_id,
-  i.insight_summary,
-  i.insight_status,
   a.alert_id,
-  a.alert_type,
-  a.alert_message,
-  a.alert_severity,
   t.trend_id,
-  t.trend_summary,
-  t.trend_status,
   m.metric_id,
   m.metric_name,
   m.value,

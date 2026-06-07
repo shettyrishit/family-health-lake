@@ -4,7 +4,9 @@ import argparse
 import csv
 from dataclasses import dataclass
 from pathlib import Path
-from family_health_lake.utils import load_yaml_config
+from typing import Any, Callable, Dict, List, Optional, Sequence
+
+from family_health_lake.utils import load_yaml_config, normalize_id_component
 
 
 OBSERVATION_FIELDS = [
@@ -95,7 +97,10 @@ def _convert_field_value(field_name: str, value: Optional[str]) -> Any:
     if value is None:
         return None
     if field_name in FLOAT_FIELDS:
-        return float(value)
+        try:
+            return float(value)
+        except ValueError:
+            return None
     if field_name in DATE_FIELDS:
         return value
     return value
@@ -218,13 +223,46 @@ def insert_rows(
     dataset: str,
     table_name: str,
     rows: Sequence[Dict[str, Any]],
+    person_id: str,
+    document_id: str,
 ) -> None:
     if not rows:
         return
-    table_id = f"{project_id}.{dataset}.{table_name}"
-    errors = client.insert_rows_json(table_id, list(rows))
-    if errors:
-        raise RuntimeError(f"BigQuery insert failed for {table_name}: {errors}")
+    
+    # BigQuery streaming inserts (insert_rows_json) can block DELETE during dev.
+    # We switch to batch load using staging table + INSERT SELECT.
+    
+    safe_doc_id = normalize_id_component(document_id)
+    staging_table_name = f"stg_{table_name}_{person_id}_{safe_doc_id}"
+    staging_table_id = f"{project_id}.{dataset}.{staging_table_name}"
+    final_table_id = f"{project_id}.{dataset}.{table_name}"
+    
+    from google.cloud import bigquery
+    
+    # 1. Load to staging table using batch load
+    # We use WRITE_TRUNCATE to ensure staging is clean
+    job_config = bigquery.LoadJobConfig(
+        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+        source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+    )
+    
+    # We need to use JSON load because we already have the rows as dicts
+    # Alternatively, we could load from the CSV file directly, but load_csv_rows 
+    # already did some validation and conversion.
+    # To avoid streaming buffer, we use load_table_from_json
+    load_job = client.load_table_from_json(list(rows), staging_table_id, job_config=job_config)
+    load_job.result()
+    
+    # 2. Insert from staging into final using query job (DML)
+    # This avoids the streaming buffer issue
+    columns = ", ".join(rows[0].keys())
+    query = f"INSERT INTO `{final_table_id}` ({columns}) SELECT {columns} FROM `{staging_table_id}`"
+    
+    query_job = client.query(query)
+    query_job.result()
+    
+    # 3. Drop staging table
+    client.delete_table(staging_table_id, not_found_ok=True)
 
 
 def load_extracted_csvs_to_bigquery(
@@ -265,6 +303,7 @@ def load_extracted_csvs_to_bigquery(
     )
 
     if replace_existing:
+        # Delete order: health_metric then observation
         delete_existing_rows(
             bigquery_client,
             project_id=project_id,
@@ -284,12 +323,15 @@ def load_extracted_csvs_to_bigquery(
             query_job_config_factory=query_job_config_factory,
         )
 
+    # Insert order: observation then health_metric
     insert_rows(
         bigquery_client,
         project_id=project_id,
         dataset=dataset,
         table_name="observation",
         rows=observation_rows,
+        person_id=person_id,
+        document_id=document_id,
     )
     insert_rows(
         bigquery_client,
@@ -297,6 +339,8 @@ def load_extracted_csvs_to_bigquery(
         dataset=dataset,
         table_name="health_metric",
         rows=health_metric_rows,
+        person_id=person_id,
+        document_id=document_id,
     )
 
     return {

@@ -13,7 +13,7 @@ from family_health_lake.dashboard.thyroid_markdown import (
 )
 
 
-def make_row(**overrides):
+def make_card_row(**overrides):
     row = {
         "person_id": "p001",
         "insight_id": "insight_p001_doc_demo_thyroid_status",
@@ -26,6 +26,19 @@ def make_row(**overrides):
         "trend_id": "trend_p001_doc_demo_thyroid_tsh_above_reference",
         "trend_summary": "TSH is above reference range on the latest available test.",
         "trend_status": "above_reference",
+        "document_id": "doc_demo",
+        "file_uri": "gs://bucket/raw/doc_demo.pdf",
+    }
+    row.update(overrides)
+    return row
+
+
+def make_trace_row(**overrides):
+    row = {
+        "person_id": "p001",
+        "insight_id": "insight_p001_doc_demo_thyroid_status",
+        "alert_id": "alert_p001_doc_demo_thyroid_tsh_above_reference",
+        "trend_id": "trend_p001_doc_demo_thyroid_tsh_above_reference",
         "metric_id": "m_p001_2026-04-25_tsh",
         "metric_name": "TSH",
         "value": 6.264,
@@ -48,7 +61,11 @@ def make_row(**overrides):
 
 class RenderThyroidDashboardMarkdownTests(unittest.TestCase):
     def test_renders_insight_section(self):
-        markdown = render_thyroid_dashboard_markdown([make_row()], person_id="p001")
+        markdown = render_thyroid_dashboard_markdown(
+            [make_card_row()],
+            [make_trace_row()],
+            person_id="p001",
+        )
 
         self.assertIn("# Thyroid Dashboard — p001", markdown)
         self.assertIn("## Insight Summary", markdown)
@@ -57,9 +74,10 @@ class RenderThyroidDashboardMarkdownTests(unittest.TestCase):
 
     def test_renders_metric_table(self):
         markdown = render_thyroid_dashboard_markdown(
+            [make_card_row()],
             [
-                make_row(),
-                make_row(
+                make_trace_row(),
+                make_trace_row(
                     metric_id="m_p001_2026-04-25_free_t4",
                     metric_name="Free T4",
                     value=1.2,
@@ -83,7 +101,11 @@ class RenderThyroidDashboardMarkdownTests(unittest.TestCase):
         self.assertIn("| Free T4 | 1.2 | ng/dL | 0.89 - 1.76 | normal |", markdown)
 
     def test_renders_trace_section(self):
-        markdown = render_thyroid_dashboard_markdown([make_row()], person_id="p001")
+        markdown = render_thyroid_dashboard_markdown(
+            [make_card_row()],
+            [make_trace_row()],
+            person_id="p001",
+        )
 
         self.assertIn("## Trace", markdown)
         self.assertIn("### TSH", markdown)
@@ -94,9 +116,9 @@ class RenderThyroidDashboardMarkdownTests(unittest.TestCase):
 
     def test_dedupes_duplicate_metric_rows_by_metric_id(self):
         rows = [
-            make_row(),
-            make_row(),
-            make_row(
+            make_trace_row(),
+            make_trace_row(),
+            make_trace_row(
                 metric_id="m_p001_2026-04-25_free_t3",
                 metric_name="Free T3",
                 value=3.1,
@@ -113,13 +135,21 @@ class RenderThyroidDashboardMarkdownTests(unittest.TestCase):
         ]
 
         deduped_rows = dedupe_metric_rows(rows)
-        markdown = render_thyroid_dashboard_markdown(rows, person_id="p001")
+        markdown = render_thyroid_dashboard_markdown(
+            [make_card_row()],
+            rows,
+            person_id="p001",
+        )
 
         self.assertEqual(2, len(deduped_rows))
         self.assertEqual(1, markdown.count("| TSH | 6.264 | uIU/mL | 0.35 - 4.94 | high |"))
 
     def test_does_not_include_coach_recommendation_section(self):
-        markdown = render_thyroid_dashboard_markdown([make_row()], person_id="p001")
+        markdown = render_thyroid_dashboard_markdown(
+            [make_card_row()],
+            [make_trace_row()],
+            person_id="p001",
+        )
 
         self.assertNotIn("Coach Recommendation", markdown)
         self.assertNotIn("## Coach", markdown)

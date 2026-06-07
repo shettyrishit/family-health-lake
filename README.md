@@ -79,6 +79,7 @@ gcloud auth application-default login
 The loader:
 - uses ADC through the `google-cloud-bigquery` client
 - reads `project_id` and `dataset` from `config/environments/dev.yaml`
+- uses BigQuery batch load/query jobs to avoid streaming buffer issues
 - does not read credentials from repo config
 - does not create or require service account key files
 - does not rely on the global `gcloud` project setting
@@ -154,7 +155,8 @@ python3 -m venv .venv
 The thyroid dashboard renderer:
 - uses ADC through the `google-cloud-bigquery` client
 - reads `project_id` and `dataset` from `config/environments/dev.yaml`
-- reads from `v_thyroid_dashboard`
+- reads summary rows from `v_thyroid_dashboard_card`
+- reads metric and trace rows from `v_thyroid_dashboard_trace`
 - renders a simple Markdown card with insight, alert, trend, metrics, and trace
 - does not generate coach recommendations
 

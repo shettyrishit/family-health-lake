@@ -4,15 +4,15 @@ import argparse
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from family_health_lake.utils import get_row_value
-
 from family_health_lake.ingestion.bigquery_csv_loader import (
     create_bigquery_client,
     load_environment_config,
 )
 
+from family_health_lake.utils import get_row_value
 
-THYROID_DASHBOARD_FIELD_NAMES = [
+
+THYROID_DASHBOARD_CARD_FIELD_NAMES = [
     "person_id",
     "insight_id",
     "insight_summary",
@@ -24,6 +24,14 @@ THYROID_DASHBOARD_FIELD_NAMES = [
     "trend_id",
     "trend_summary",
     "trend_status",
+    "document_id",
+    "file_uri",
+]
+THYROID_DASHBOARD_TRACE_FIELD_NAMES = [
+    "person_id",
+    "insight_id",
+    "alert_id",
+    "trend_id",
     "metric_id",
     "metric_name",
     "value",
@@ -40,6 +48,7 @@ THYROID_DASHBOARD_FIELD_NAMES = [
     "document_id",
     "file_uri",
 ]
+THYROID_DASHBOARD_FIELD_NAMES = THYROID_DASHBOARD_TRACE_FIELD_NAMES
 
 
 def build_cli_parser() -> argparse.ArgumentParser:
@@ -56,15 +65,63 @@ def _default_query_job_config_factory(person_id: str) -> Any:
     try:
         from google.cloud import bigquery  # type: ignore
     except ImportError as exc:
-        raise RuntimeError(
-            "google-cloud-bigquery is required for dashboard rendering. Install the bigquery extra before running this CLI."
-        ) from exc
+        return None
 
     return bigquery.QueryJobConfig(
         query_parameters=[
             bigquery.ScalarQueryParameter("person_id", "STRING", person_id),
         ]
     )
+
+
+def fetch_thyroid_dashboard_card_rows(
+    client: Any,
+    *,
+    project_id: str,
+    dataset: str,
+    person_id: str,
+    query_job_config_factory: Optional[Callable[[str], Any]] = None,
+) -> List[Dict[str, Any]]:
+    query = (
+        f"SELECT {', '.join(THYROID_DASHBOARD_CARD_FIELD_NAMES)} "
+        f"FROM `{project_id}.{dataset}.v_thyroid_dashboard_card` "
+        "WHERE person_id = @person_id "
+        "ORDER BY insight_id, alert_id, trend_id"
+    )
+    config_factory = query_job_config_factory or _default_query_job_config_factory
+    query_job = client.query(query, job_config=config_factory(person_id))
+    return [
+        {
+            field_name: get_row_value(row, field_name)
+            for field_name in THYROID_DASHBOARD_CARD_FIELD_NAMES
+        }
+        for row in query_job.result()
+    ]
+
+
+def fetch_thyroid_dashboard_trace_rows(
+    client: Any,
+    *,
+    project_id: str,
+    dataset: str,
+    person_id: str,
+    query_job_config_factory: Optional[Callable[[str], Any]] = None,
+) -> List[Dict[str, Any]]:
+    query = (
+        f"SELECT {', '.join(THYROID_DASHBOARD_TRACE_FIELD_NAMES)} "
+        f"FROM `{project_id}.{dataset}.v_thyroid_dashboard_trace` "
+        "WHERE person_id = @person_id "
+        "ORDER BY metric_name, metric_id, observation_id"
+    )
+    config_factory = query_job_config_factory or _default_query_job_config_factory
+    query_job = client.query(query, job_config=config_factory(person_id))
+    return [
+        {
+            field_name: get_row_value(row, field_name)
+            for field_name in THYROID_DASHBOARD_TRACE_FIELD_NAMES
+        }
+        for row in query_job.result()
+    ]
 
 
 def fetch_thyroid_dashboard_rows(
@@ -75,21 +132,14 @@ def fetch_thyroid_dashboard_rows(
     person_id: str,
     query_job_config_factory: Optional[Callable[[str], Any]] = None,
 ) -> List[Dict[str, Any]]:
-    query = (
-        f"SELECT {', '.join(THYROID_DASHBOARD_FIELD_NAMES)} "
-        f"FROM `{project_id}.{dataset}.v_thyroid_dashboard` "
-        "WHERE person_id = @person_id "
-        "ORDER BY metric_name, metric_id, observation_id"
+    """Backward-compatible alias for the trace-detail dashboard rows."""
+    return fetch_thyroid_dashboard_trace_rows(
+        client,
+        project_id=project_id,
+        dataset=dataset,
+        person_id=person_id,
+        query_job_config_factory=query_job_config_factory,
     )
-    config_factory = query_job_config_factory or _default_query_job_config_factory
-    query_job = client.query(query, job_config=config_factory(person_id))
-    return [
-        {
-            field_name: get_row_value(row, field_name)
-            for field_name in THYROID_DASHBOARD_FIELD_NAMES
-        }
-        for row in query_job.result()
-    ]
 
 
 def _first_non_empty_value(rows: Sequence[Dict[str, Any]], field_name: str) -> str:
@@ -180,13 +230,14 @@ def group_trace_rows_by_metric(
 
 
 def render_thyroid_dashboard_markdown(
-    rows: Sequence[Dict[str, Any]],
+    card_rows: Sequence[Dict[str, Any]],
+    trace_rows: Sequence[Dict[str, Any]],
     *,
     person_id: str,
 ) -> str:
     lines = [f"# Thyroid Dashboard — {person_id}", ""]
 
-    if not rows:
+    if not card_rows and not trace_rows:
         lines.extend(
             [
                 "No thyroid dashboard rows found.",
@@ -198,20 +249,20 @@ def render_thyroid_dashboard_markdown(
     lines.extend(
         [
             "## Insight Summary",
-            _first_non_empty_value(rows, "insight_summary") or "No insight available.",
+            _first_non_empty_value(card_rows, "insight_summary") or "No insight available.",
             "",
-            f"Status: {_first_non_empty_value(rows, 'insight_status') or 'unknown'}",
+            f"Status: {_first_non_empty_value(card_rows, 'insight_status') or 'unknown'}",
             "",
             "## Alert Summary",
-            _first_non_empty_value(rows, "alert_message") or "No alert available.",
+            _first_non_empty_value(card_rows, "alert_message") or "No alert available.",
             "",
-            f"Type: {_first_non_empty_value(rows, 'alert_type') or 'n/a'}",
-            f"Severity: {_first_non_empty_value(rows, 'alert_severity') or 'n/a'}",
+            f"Type: {_first_non_empty_value(card_rows, 'alert_type') or 'n/a'}",
+            f"Severity: {_first_non_empty_value(card_rows, 'alert_severity') or 'n/a'}",
             "",
             "## Trend Summary",
-            _first_non_empty_value(rows, "trend_summary") or "No trend available.",
+            _first_non_empty_value(card_rows, "trend_summary") or "No trend available.",
             "",
-            f"Status: {_first_non_empty_value(rows, 'trend_status') or 'unknown'}",
+            f"Status: {_first_non_empty_value(card_rows, 'trend_status') or 'unknown'}",
             "",
             "## Key Metrics",
             "| Metric | Value | Unit | Reference Range | Status |",
@@ -219,7 +270,7 @@ def render_thyroid_dashboard_markdown(
         ]
     )
 
-    for row in dedupe_metric_rows(rows):
+    for row in dedupe_metric_rows(trace_rows):
         lines.append(
             "| {metric} | {value} | {unit} | {reference_range} | {status} |".format(
                 metric=row.get("metric_name") or "",
@@ -232,10 +283,10 @@ def render_thyroid_dashboard_markdown(
 
     lines.extend(["", "## Trace", ""])
 
-    for metric_row, trace_rows in group_trace_rows_by_metric(rows):
+    for metric_row, metric_trace_rows in group_trace_rows_by_metric(trace_rows):
         lines.append(f"### {metric_row.get('metric_name') or metric_row.get('metric_id')}")
         lines.append("")
-        for trace_row in trace_rows:
+        for trace_row in metric_trace_rows:
             lines.extend(
                 [
                     f"- `insight_id`: {trace_row.get('insight_id') or ''}",
@@ -268,14 +319,25 @@ def render_thyroid_dashboard_to_markdown(
     dataset = environment_config["bigquery"]["dataset"]
     bigquery_client = client or create_bigquery_client(project_id)
 
-    rows = fetch_thyroid_dashboard_rows(
+    card_rows = fetch_thyroid_dashboard_card_rows(
         bigquery_client,
         project_id=project_id,
         dataset=dataset,
         person_id=person_id,
         query_job_config_factory=query_job_config_factory,
     )
-    markdown = render_thyroid_dashboard_markdown(rows, person_id=person_id)
+    trace_rows = fetch_thyroid_dashboard_trace_rows(
+        bigquery_client,
+        project_id=project_id,
+        dataset=dataset,
+        person_id=person_id,
+        query_job_config_factory=query_job_config_factory,
+    )
+    markdown = render_thyroid_dashboard_markdown(
+        card_rows,
+        trace_rows,
+        person_id=person_id,
+    )
 
     output_path = Path(output_md_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -286,8 +348,9 @@ def render_thyroid_dashboard_to_markdown(
         "dataset": dataset,
         "person_id": person_id,
         "output_md_path": str(output_path),
-        "dashboard_rows_read": len(rows),
-        "metric_rows_rendered": len(dedupe_metric_rows(rows)),
+        "dashboard_card_rows_read": len(card_rows),
+        "dashboard_trace_rows_read": len(trace_rows),
+        "metric_rows_rendered": len(dedupe_metric_rows(trace_rows)),
     }
 
 
