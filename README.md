@@ -120,6 +120,40 @@ python3 scripts/extraction/extract_garmin_raw_json.py \
 
 This is the first Garmin extraction step. It currently supports a bounded subset of wrapped Garmin categories, writes a structure-only discovery report when requested, and skips unsupported or empty categories with clear reasons. It does not write directly to BigQuery. See `docs/spikes/garmin_raw_json_to_observations.md` for scope, mapping details, and safety notes.
 
+## Garmin Weekly Rollup
+
+Use the Garmin weekly rollup CLI to read Garmin daily/activity facts from BigQuery and generate synthetic weekly rollup observations plus weekly health metrics.
+
+This is a weekly facts layer, not an insight or coaching layer.
+
+Run it with:
+
+```bash
+python3 scripts/synthesis/generate_garmin_weekly_rollup.py \
+  --environment-config config/environments/dev.yaml \
+  --person-id p001 \
+  --start-date 2026-06-01 \
+  --end-date 2026-06-28 \
+  --output-observations-csv outputs/garmin_weekly_observations_p001.csv \
+  --output-health-metrics-csv outputs/garmin_weekly_health_metric_p001.csv
+```
+
+Load the same weekly rollups back to BigQuery using non-streaming batch load/query jobs:
+
+```bash
+python3 scripts/synthesis/generate_garmin_weekly_rollup.py \
+  --environment-config config/environments/dev.yaml \
+  --person-id p001 \
+  --start-date 2026-06-01 \
+  --end-date 2026-06-28 \
+  --output-observations-csv outputs/garmin_weekly_observations_p001.csv \
+  --output-health-metrics-csv outputs/garmin_weekly_health_metric_p001.csv \
+  --load-to-bigquery \
+  --replace-existing
+```
+
+The rollup uses Monday as `week_start`, treats weekly outputs as synthetic observations derived from Garmin daily/activity metrics, and stores compact source trace in `notes`. See `docs/spikes/garmin_weekly_rollup_v0.md` for scope and traceability notes.
+
 ## Local BigQuery Load
 
 Install the optional BigQuery dependencies when you want to load extractor outputs into BigQuery:

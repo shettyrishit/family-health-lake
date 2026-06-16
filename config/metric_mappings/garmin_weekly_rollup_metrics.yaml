@@ -1,0 +1,58 @@
+source: garmin_weekly_rollup
+
+metrics:
+  steps_avg:
+    display_name: Average Steps
+    category: training_activity
+    unit: steps/day
+    taxonomy: training_activity
+    aggregation: average
+    source_metric_names: Steps
+
+  resting_hr_avg:
+    display_name: Average Resting HR
+    category: recovery_sleep
+    unit: bpm
+    taxonomy: recovery_sleep
+    aggregation: average
+    source_metric_names: Resting HR
+
+  hrv_avg:
+    display_name: Average HRV
+    category: recovery_sleep
+    unit: ms
+    taxonomy: recovery_sleep
+    aggregation: average
+    source_metric_names: HRV Average
+
+  sleep_avg_minutes:
+    display_name: Average Sleep
+    category: recovery_sleep
+    unit: minutes/day
+    taxonomy: recovery_sleep
+    aggregation: average
+    source_metric_names: Sleep
+
+  activity_count:
+    display_name: Activity Count
+    category: training_activity
+    unit: activities/week
+    taxonomy: training_activity
+    aggregation: count_distinct_activities
+    source_metric_names: Activity Duration|Activity Distance
+
+  activity_duration_minutes_total:
+    display_name: Total Activity Duration
+    category: training_activity
+    unit: minutes/week
+    taxonomy: training_activity
+    aggregation: sum
+    source_metric_names: Activity Duration
+
+  activity_distance_km_total:
+    display_name: Total Activity Distance
+    category: training_activity
+    unit: km/week
+    taxonomy: training_activity
+    aggregation: sum
+    source_metric_names: Activity Distance
