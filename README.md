@@ -154,6 +154,8 @@ python3 scripts/synthesis/generate_garmin_weekly_rollup.py \
 
 The rollup uses Monday as `week_start`, treats weekly outputs as synthetic observations derived from Garmin daily/activity metrics, and stores compact source trace in `notes`. See `docs/spikes/garmin_weekly_rollup_v0.md` for scope and traceability notes.
 
+The BigQuery schema file [schemas/bigquery/010_create_v_garmin_weekly_rollup.sql](/Users/rishi/family-health-lake/schemas/bigquery/010_create_v_garmin_weekly_rollup.sql) creates `v_garmin_weekly_rollup`, a technical base view for inspecting weekly Garmin rollup metrics and supporting future weekly fitness dashboard rendering.
+
 ## Local BigQuery Load
 
 Install the optional BigQuery dependencies when you want to load extractor outputs into BigQuery:
