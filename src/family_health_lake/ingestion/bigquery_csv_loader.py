@@ -53,6 +53,46 @@ OBSERVATION_REQUIRED_FIELDS = {"observation_id", "person_id"}
 HEALTH_METRIC_REQUIRED_FIELDS = {"metric_id", "person_id", "observation_id", "metric_date", "metric_name"}
 FLOAT_FIELDS = {"parsed_value", "confidence", "value", "reference_low", "reference_high"}
 DATE_FIELDS = {"observed_at", "metric_date"}
+BIGQUERY_TABLE_FIELD_TYPES = {
+    "observation": {
+        "observation_id": "STRING",
+        "person_id": "STRING",
+        "document_id": "STRING",
+        "observed_at": "DATE",
+        "source": "STRING",
+        "taxonomy": "STRING",
+        "observation_type": "STRING",
+        "raw_label": "STRING",
+        "raw_value": "STRING",
+        "normalized_label": "STRING",
+        "parsed_value": "FLOAT64",
+        "unit": "STRING",
+        "source_location": "STRING",
+        "confidence": "FLOAT64",
+        "conversion_status": "STRING",
+        "raw_text": "STRING",
+        "surrounding_text": "STRING",
+        "failure_reason": "STRING",
+        "notes": "STRING",
+    },
+    "health_metric": {
+        "metric_id": "STRING",
+        "person_id": "STRING",
+        "document_id": "STRING",
+        "observation_id": "STRING",
+        "metric_date": "DATE",
+        "source": "STRING",
+        "category": "STRING",
+        "metric_name": "STRING",
+        "value": "FLOAT64",
+        "text_value": "STRING",
+        "unit": "STRING",
+        "reference_low": "FLOAT64",
+        "reference_high": "FLOAT64",
+        "status": "STRING",
+        "notes": "STRING",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -60,6 +100,33 @@ class TableLoadConfig:
     table_name: str
     fieldnames: Sequence[str]
     required_fields: set[str]
+
+
+@dataclass(frozen=True)
+class _CompatSchemaField:
+    name: str
+    field_type: str
+
+
+class _CompatLoadJobConfig:
+    def __init__(self, **kwargs: Any):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+class _CompatWriteDisposition:
+    WRITE_TRUNCATE = "WRITE_TRUNCATE"
+
+
+class _CompatSourceFormat:
+    NEWLINE_DELIMITED_JSON = "NEWLINE_DELIMITED_JSON"
+
+
+class _CompatBigQueryModule:
+    SchemaField = _CompatSchemaField
+    LoadJobConfig = _CompatLoadJobConfig
+    WriteDisposition = _CompatWriteDisposition
+    SourceFormat = _CompatSourceFormat
 
 
 def build_cli_parser() -> argparse.ArgumentParser:
@@ -174,6 +241,14 @@ def create_bigquery_client(project_id: str):
         ) from exc
 
 
+def _get_bigquery_module():
+    try:
+        from google.cloud import bigquery  # type: ignore
+    except ImportError:
+        return _CompatBigQueryModule
+    return bigquery
+
+
 def _default_query_job_config_factory(document_id: str, person_id: str):
     try:
         from google.cloud import bigquery  # type: ignore
@@ -191,6 +266,19 @@ def _default_query_job_config_factory(document_id: str, person_id: str):
             bigquery.ScalarQueryParameter("person_id", "STRING", person_id),
         ]
     )
+
+
+def _build_staging_schema(table_name: str):
+    bigquery = _get_bigquery_module()
+
+    field_types = BIGQUERY_TABLE_FIELD_TYPES.get(table_name)
+    if field_types is None:
+        raise ValueError(f"Unsupported table_name for staging schema: {table_name}")
+
+    return [
+        bigquery.SchemaField(field_name, field_type)
+        for field_name, field_type in field_types.items()
+    ]
 
 
 def delete_existing_rows(
@@ -237,13 +325,14 @@ def insert_rows(
     staging_table_id = f"{project_id}.{dataset}.{staging_table_name}"
     final_table_id = f"{project_id}.{dataset}.{table_name}"
     
-    from google.cloud import bigquery
+    bigquery = _get_bigquery_module()
     
     # 1. Load to staging table using batch load
     # We use WRITE_TRUNCATE to ensure staging is clean
     job_config = bigquery.LoadJobConfig(
         write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
         source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+        schema=_build_staging_schema(table_name),
     )
     
     # We need to use JSON load because we already have the rows as dicts

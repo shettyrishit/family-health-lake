@@ -302,8 +302,8 @@ def _build_health_metric_row(
         "value": value,
         "text_value": "",
         "unit": mapping.unit,
-        "reference_low": "",
-        "reference_high": "",
+        "reference_low": None,
+        "reference_high": None,
         "status": mapping.status,
         "notes": notes,
     }

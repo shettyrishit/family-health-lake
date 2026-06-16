@@ -123,6 +123,16 @@ class LoadExtractedCsvsToBigQueryTests(unittest.TestCase):
         self.assertIn("stg_observation_p001_doc_p001_lab_2026_04_25_tata_1mg_fake", client.deleted_tables[0])
         self.assertIn("stg_health_metric_p001_doc_p001_lab_2026_04_25_tata_1mg_fake", client.deleted_tables[1])
 
+        observation_schema = client.load_calls[0]["job_config"].schema
+        metric_schema = client.load_calls[1]["job_config"].schema
+        observation_field_types = {field.name: field.field_type for field in observation_schema}
+        metric_field_types = {field.name: field.field_type for field in metric_schema}
+        self.assertEqual("DATE", observation_field_types["observed_at"])
+        self.assertIn(observation_field_types["parsed_value"], {"FLOAT", "FLOAT64"})
+        self.assertEqual("DATE", metric_field_types["metric_date"])
+        self.assertIn(metric_field_types["reference_low"], {"FLOAT", "FLOAT64"})
+        self.assertIn(metric_field_types["reference_high"], {"FLOAT", "FLOAT64"})
+        
         self.assertEqual(2, result["observations_loaded"])
         self.assertEqual(1, result["health_metrics_loaded"])
 
