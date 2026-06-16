@@ -56,9 +56,26 @@ Status: Completed
 → thyroid intelligence
 → markdown thyroid dashboard
 
+## Milestone 5: Garmin Integration
+
+Status: Completed
+
+- Garmin Connect raw fetch to local/GCS (via `python-garminconnect`)
+- Garmin raw JSON extraction to observations/health_metric
+- Garmin BigQuery load + trace validation
+- Garmin Weekly Rollup v0 facts generation
+
+## Milestone 6: Garmin Weekly View and Insights
+
+Status: In Progress
+
+- Garmin weekly rollup BigQuery view
+- Garmin weekly markdown fitness card
+- Later: Garmin weekly/monthly fitness intelligence
+
 ## Future Work: Evaluate Open Wearables as Multi-Provider Wearable Gateway
 
-Current Garmin ingestion is built using `python-garminconnect` as a Garmin-specific fetch adapter. This is acceptable for the current personal Health Lake phase because it proves:
+Current Garmin ingestion is built using `python-garminconnect` as a mainstream Garmin-specific fetch adapter. This is acceptable for the current personal Health Lake phase because it is now a fully integrated pipeline:
 
 - Garmin authentication works
 - Raw Garmin data can be fetched locally

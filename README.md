@@ -55,9 +55,9 @@ Run the fake-fixture test suite with:
 python3 -m pytest
 ```
 
-## Garmin Cloud Fetch Spike
+## Garmin Cloud Ingestion
 
-Use the Garmin spike CLI to authenticate to Garmin Connect, fetch raw JSON for a bounded date range, write the raw files under `outputs/`, and optionally upload the same raw files to the configured GCS raw bucket.
+Use the Garmin ingestion adapter to authenticate to Garmin Connect, fetch raw JSON for a bounded date range, write the raw files under `outputs/`, and optionally upload the same raw files to the configured GCS raw bucket.
 
 Install the optional Garmin dependencies:
 
@@ -73,10 +73,10 @@ Authenticate to Google Application Default Credentials before using `--upload-to
 gcloud auth application-default login
 ```
 
-Run the spike locally:
+Run the ingestion adapter locally:
 
 ```bash
-GARMIN_EMAIL="..." GARMIN_PASSWORD="..." python3 scripts/spikes/fetch_garmin_to_gcs.py \
+GARMIN_EMAIL="..." GARMIN_PASSWORD="..." python3 scripts/ingestion/fetch_garmin_to_gcs.py \
   --environment-config config/environments/dev.yaml \
   --person-id p001 \
   --start-date 2026-06-10 \
@@ -87,7 +87,7 @@ GARMIN_EMAIL="..." GARMIN_PASSWORD="..." python3 scripts/spikes/fetch_garmin_to_
 Upload the same raw JSON files to GCS:
 
 ```bash
-GARMIN_EMAIL="..." GARMIN_PASSWORD="..." python3 scripts/spikes/fetch_garmin_to_gcs.py \
+GARMIN_EMAIL="..." GARMIN_PASSWORD="..." python3 scripts/ingestion/fetch_garmin_to_gcs.py \
   --environment-config config/environments/dev.yaml \
   --person-id p001 \
   --start-date 2026-06-10 \
@@ -96,7 +96,7 @@ GARMIN_EMAIL="..." GARMIN_PASSWORD="..." python3 scripts/spikes/fetch_garmin_to_
   --upload-to-gcs
 ```
 
-This is a raw-landing-only spike. It does not parse Garmin data into observations, does not write to BigQuery, and does not create `health_metric`, trend, alert, insight, or dashboard rows. See `docs/spikes/garmin_cloud_fetch_proof.md` for the spike scope and safety notes.
+This adapter preserves raw JSON for downstream extraction. It supports MFA and token persistence to avoid repeated logins.
 
 ## Garmin Raw JSON Extraction
 

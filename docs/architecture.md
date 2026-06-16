@@ -33,6 +33,22 @@ A system taxonomy called **Unidentified** is used when data cannot yet be classi
 
 ---
 
+### Garmin Ingestion
+
+Garmin ingestion is built using `python-garminconnect` as a mainstream Garmin-specific fetch adapter.
+
+Responsibilities:
+
+*   Authenticate to Garmin Connect (supports MFA and token persistence)
+*   Fetch raw JSON for categories: activities, daily summary, sleep, HRV, heart rate
+*   Preserve raw JSON in GCS raw landing zone
+*   Extract observations and health metrics from raw JSON
+*   Generate weekly rollups of key Garmin metrics
+
+This adapter is part of the mainstream pipeline and provides high-resolution data for fitness and recovery insights.
+
+---
+
 ## Layered Architecture
 
 The system has six active data layers and one separate future coach layer.
@@ -614,16 +630,17 @@ Current dashboard implementation for thyroid shows:
 
 ## Later Vertical Slices
 
-### Garmin Slice
+### Garmin Integration Slice (Mainstream)
+
+The Garmin slice is now a mainstream part of the health lake:
 
 ```text
-Garmin export / integration
-→ Observations
-→ Metrics: VO₂ max, HRV, resting HR, sleep, steps, workouts
-→ Trends
-→ Alerts
-→ Training and recovery insights
-→ Dashboard trace
+Garmin Connect (via python-garminconnect)
+→ Raw JSON landing (local/GCS)
+→ Observation extraction
+→ Health metrics: VO₂ max, HRV, resting HR, sleep, steps, activities
+→ Weekly rollup facts
+→ [In Progress] Weekly fitness intelligence and dashboard view
 ```
 
 ### FITTR Body Composition Slice

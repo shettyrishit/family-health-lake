@@ -56,7 +56,7 @@ class CategoryUnavailableError(RuntimeError):
 def build_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Spike CLI that fetches raw Garmin Connect JSON locally and optionally "
+            "Fetches raw Garmin Connect JSON locally and optionally "
             "uploads the raw files to Google Cloud Storage."
         )
     )
@@ -150,7 +150,7 @@ def create_garmin_client(
 ) -> Garmin:
     if Garmin is None:
         raise RuntimeError(
-            "garminconnect is required for this spike. "
+            "garminconnect is required for this ingestion adapter. "
             'Install the optional Garmin dependencies with `python3 -m pip install -e ".[garmin]"`.'
         )
 
