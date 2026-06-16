@@ -98,6 +98,28 @@ GARMIN_EMAIL="..." GARMIN_PASSWORD="..." python3 scripts/spikes/fetch_garmin_to_
 
 This is a raw-landing-only spike. It does not parse Garmin data into observations, does not write to BigQuery, and does not create `health_metric`, trend, alert, insight, or dashboard rows. See `docs/spikes/garmin_cloud_fetch_proof.md` for the spike scope and safety notes.
 
+## Garmin Raw JSON Extraction
+
+Use the Garmin raw JSON extractor to convert the wrapped Garmin fetch outputs into `observations.csv` and `health_metric.csv`.
+
+This step is intentionally separate from the Garmin fetch step:
+- fetch preserves raw JSON locally and optionally uploads it to GCS
+- extraction reads those raw JSON files and emits observation-first CSV outputs
+
+Run the extractor with:
+
+```bash
+python3 scripts/extraction/extract_garmin_raw_json.py \
+  --input-dir outputs/garmin_fetch/person_id=p001/provider=garmin/date_range=2026-06-10_2026-06-16 \
+  --person-id p001 \
+  --document-id doc_p001_garmin_raw_2026_06_10_2026_06_16_fetch_v0 \
+  --output-observations-csv outputs/garmin_observations_p001.csv \
+  --output-health-metrics-csv outputs/garmin_health_metric_p001.csv \
+  --write-discovery-report outputs/garmin_raw_discovery_report.json
+```
+
+This is the first Garmin extraction step. It currently supports a bounded subset of wrapped Garmin categories, writes a structure-only discovery report when requested, and skips unsupported or empty categories with clear reasons. It does not write directly to BigQuery. See `docs/spikes/garmin_raw_json_to_observations.md` for scope, mapping details, and safety notes.
+
 ## Local BigQuery Load
 
 Install the optional BigQuery dependencies when you want to load extractor outputs into BigQuery:

@@ -1,0 +1,76 @@
+source: garmin_connect_raw_json
+provider: garmin
+raw_source: python_garminconnect
+
+metrics:
+  steps:
+    display_name: Steps
+    category: training_activity
+    unit: steps/day
+    taxonomy: training_activity
+    observation_type: daily_metric
+    status: tracked
+
+  resting_hr:
+    display_name: Resting HR
+    category: recovery_sleep
+    unit: bpm
+    taxonomy: recovery_sleep
+    observation_type: daily_metric
+    status: tracked
+
+  sleep_minutes:
+    display_name: Sleep
+    category: recovery_sleep
+    unit: minutes/day
+    taxonomy: recovery_sleep
+    observation_type: daily_metric
+    status: tracked
+
+  hrv_avg:
+    display_name: HRV Average
+    category: recovery_sleep
+    unit: ms
+    taxonomy: recovery_sleep
+    observation_type: daily_metric
+    status: tracked
+
+  avg_hr:
+    display_name: Average HR
+    category: recovery_sleep
+    unit: bpm
+    taxonomy: recovery_sleep
+    observation_type: daily_metric
+    status: tracked
+
+  min_hr:
+    display_name: Min HR
+    category: recovery_sleep
+    unit: bpm
+    taxonomy: recovery_sleep
+    observation_type: daily_metric
+    status: tracked
+
+  max_hr:
+    display_name: Max HR
+    category: recovery_sleep
+    unit: bpm
+    taxonomy: recovery_sleep
+    observation_type: daily_metric
+    status: tracked
+
+  activity_duration_minutes:
+    display_name: Activity Duration
+    category: training_activity
+    unit: minutes
+    taxonomy: training_activity
+    observation_type: activity
+    status: tracked
+
+  activity_distance_km:
+    display_name: Activity Distance
+    category: training_activity
+    unit: km
+    taxonomy: training_activity
+    observation_type: activity
+    status: tracked

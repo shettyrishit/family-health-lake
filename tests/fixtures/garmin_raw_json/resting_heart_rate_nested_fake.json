@@ -1,0 +1,29 @@
+{
+  "person_id": "p001",
+  "provider": "garmin",
+  "source": "python_garminconnect",
+  "category": "resting_heart_rate",
+  "start_date": "2026-06-10",
+  "end_date": "2026-06-10",
+  "fetched_at": "2026-06-16T12:34:56Z",
+  "raw_payload": {
+    "category": "resting_heart_rate",
+    "entries": [
+      {
+        "date": "2026-06-10",
+        "payload": {
+          "allMetrics": {
+            "metricsMap": {
+              "WELLNESS_RESTING_HEART_RATE": [
+                {
+                  "calendarDate": "2026-06-10",
+                  "value": 46
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

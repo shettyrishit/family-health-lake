@@ -1,0 +1,18 @@
+{
+  "person_id": "p001",
+  "provider": "garmin",
+  "source": "python_garminconnect",
+  "category": "hrv",
+  "start_date": "2026-06-10",
+  "end_date": "2026-06-10",
+  "fetched_at": "2026-06-16T12:34:56Z",
+  "raw_payload": {
+    "category": "hrv",
+    "entries": [
+      {
+        "date": "2026-06-10",
+        "payload": {}
+      }
+    ]
+  }
+}

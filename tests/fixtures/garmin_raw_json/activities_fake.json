@@ -1,0 +1,21 @@
+{
+  "person_id": "p001",
+  "provider": "garmin",
+  "source": "python_garminconnect",
+  "category": "activities",
+  "start_date": "2026-06-10",
+  "end_date": "2026-06-10",
+  "fetched_at": "2026-06-16T12:34:56Z",
+  "raw_payload": {
+    "category": "activities",
+    "entries": [
+      {
+        "activityId": 987654,
+        "activityDate": "2026-06-10",
+        "activityName": "Morning Run",
+        "duration": 3660,
+        "distance": 5025.0
+      }
+    ]
+  }
+}

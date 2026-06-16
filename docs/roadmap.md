@@ -55,3 +55,9 @@ Status: Completed
 → BigQuery load
 → thyroid intelligence
 → markdown thyroid dashboard
+
+## Garmin Cloud Fetch Proof v0
+- Garmin authentication works, including MFA
+- Raw Garmin data downloads locally
+- Raw Garmin payloads upload to GCS
+- No observation/metric conversion yet

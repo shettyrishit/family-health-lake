@@ -1,0 +1,37 @@
+{
+  "person_id": "p001",
+  "provider": "garmin",
+  "source": "python_garminconnect",
+  "category": "heart_rates",
+  "start_date": "2026-06-10",
+  "end_date": "2026-06-10",
+  "fetched_at": "2026-06-16T12:34:56Z",
+  "raw_payload": {
+    "category": "heart_rates",
+    "entries": [
+      {
+        "date": "2026-06-10",
+        "payload": {
+          "calendarDate": "2026-06-10",
+          "minHeartRate": 42,
+          "maxHeartRate": 164,
+          "heartRateValueDescriptors": [
+            {
+              "index": 0,
+              "key": "timestamp"
+            },
+            {
+              "index": 1,
+              "key": "heartrate"
+            }
+          ],
+          "heartRateValues": [
+            [1717977600, 60],
+            [1717977900, 72],
+            [1717978200, 78]
+          ]
+        }
+      }
+    ]
+  }
+}

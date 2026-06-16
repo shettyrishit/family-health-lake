@@ -1,0 +1,9 @@
+{
+  "person_id": "p001",
+  "provider": "garmin",
+  "source": "python_garminconnect",
+  "category": "sleep",
+  "start_date": "2026-06-10",
+  "end_date": "2026-06-10",
+  "fetched_at": "2026-06-16T12:34:56Z"
+}

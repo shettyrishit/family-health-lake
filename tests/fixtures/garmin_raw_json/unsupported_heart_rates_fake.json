@@ -1,0 +1,20 @@
+{
+  "person_id": "p001",
+  "provider": "garmin",
+  "source": "python_garminconnect",
+  "category": "heart_rates",
+  "start_date": "2026-06-10",
+  "end_date": "2026-06-10",
+  "fetched_at": "2026-06-16T12:34:56Z",
+  "raw_payload": {
+    "category": "heart_rates",
+    "entries": [
+      {
+        "date": "2026-06-10",
+        "payload": {
+          "restingHeartRate": 49
+        }
+      }
+    ]
+  }
+}

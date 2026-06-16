@@ -1,0 +1,27 @@
+{
+  "person_id": "p001",
+  "provider": "garmin",
+  "source": "python_garminconnect",
+  "category": "daily_activity_summary",
+  "start_date": "2026-06-10",
+  "end_date": "2026-06-10",
+  "fetched_at": "2026-06-16T12:34:56Z",
+  "raw_payload": {
+    "category": "daily_activity_summary",
+    "entries": [
+      {
+        "date": "2026-06-10",
+        "user_summary": {
+          "calendarDate": "2026-06-10",
+          "totalSteps": 12345
+        },
+        "steps_data": [
+          {
+            "calendarDate": "2026-06-10",
+            "steps": 12345
+          }
+        ]
+      }
+    ]
+  }
+}
