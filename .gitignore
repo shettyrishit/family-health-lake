@@ -236,6 +236,7 @@ medical_reports/
 *.xls
 *.zip
 outputs/
+.local/
 
 # Editor and OS files
 .idea/

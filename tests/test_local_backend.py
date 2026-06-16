@@ -22,6 +22,19 @@ class LocalBackendMetadataTests(unittest.TestCase):
             "Requires-Dist: PyYAML>=6,<7; extra == 'bigquery'",
             metadata,
         )
+        self.assertIn("Provides-Extra: garmin", metadata)
+        self.assertIn(
+            "Requires-Dist: garminconnect>=0.3.6,<0.4; extra == 'garmin'",
+            metadata,
+        )
+        self.assertIn(
+            "Requires-Dist: curl_cffi>=0.7,<1; extra == 'garmin'",
+            metadata,
+        )
+        self.assertIn(
+            "Requires-Dist: google-cloud-storage>=2,<4; extra == 'garmin'",
+            metadata,
+        )
         self.assertIn("Provides-Extra: pdf", metadata)
         self.assertIn("Provides-Extra: test", metadata)
 

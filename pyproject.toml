@@ -15,6 +15,11 @@ bigquery = [
     "google-cloud-bigquery>=3,<4",
     "PyYAML>=6,<7",
 ]
+garmin = [
+    "garminconnect>=0.3.6,<0.4",
+    "curl_cffi>=0.7,<1",
+    "google-cloud-storage>=2,<4",
+]
 pdf = [
     "PyMuPDF>=1.24,<2",
 ]

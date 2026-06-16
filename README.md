@@ -55,6 +55,49 @@ Run the fake-fixture test suite with:
 python3 -m pytest
 ```
 
+## Garmin Cloud Fetch Spike
+
+Use the Garmin spike CLI to authenticate to Garmin Connect, fetch raw JSON for a bounded date range, write the raw files under `outputs/`, and optionally upload the same raw files to the configured GCS raw bucket.
+
+Install the optional Garmin dependencies:
+
+```bash
+python3 -m pip install -e ".[garmin]"
+```
+
+The current upstream `garminconnect` package release requires Python 3.12 or newer.
+
+Authenticate to Google Application Default Credentials before using `--upload-to-gcs`:
+
+```bash
+gcloud auth application-default login
+```
+
+Run the spike locally:
+
+```bash
+GARMIN_EMAIL="..." GARMIN_PASSWORD="..." python3 scripts/spikes/fetch_garmin_to_gcs.py \
+  --environment-config config/environments/dev.yaml \
+  --person-id p001 \
+  --start-date 2026-06-10 \
+  --end-date 2026-06-16 \
+  --output-dir outputs/garmin_fetch
+```
+
+Upload the same raw JSON files to GCS:
+
+```bash
+GARMIN_EMAIL="..." GARMIN_PASSWORD="..." python3 scripts/spikes/fetch_garmin_to_gcs.py \
+  --environment-config config/environments/dev.yaml \
+  --person-id p001 \
+  --start-date 2026-06-10 \
+  --end-date 2026-06-16 \
+  --output-dir outputs/garmin_fetch \
+  --upload-to-gcs
+```
+
+This is a raw-landing-only spike. It does not parse Garmin data into observations, does not write to BigQuery, and does not create `health_metric`, trend, alert, insight, or dashboard rows. See `docs/spikes/garmin_cloud_fetch_proof.md` for the spike scope and safety notes.
+
 ## Local BigQuery Load
 
 Install the optional BigQuery dependencies when you want to load extractor outputs into BigQuery:
